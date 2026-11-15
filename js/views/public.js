@@ -4,6 +4,9 @@ import { hydrateMedia } from '../media.js';
 import * as api from '../api.js';
 import { state } from '../state.js';
 import { icon } from '../icons.js';
+import * as homeApi from '../api-home.js';
+import { renderShowcase } from './showcase.js';
+import { homeCountdown } from './countdown.js';
 import * as lore from '../api-lore.js';
 import { go } from '../app.js';
 
@@ -50,8 +53,9 @@ const emptyState = (title, body = '') => `<div class="empty"><div class="empty-i
 // ─── Home ──────────────────────────────────────────────────────────────
 export async function home(main, _, ctx) {
   main.innerHTML = loading();
-  const [chars, imgs, teams, seasons, mysteries] = await Promise.all([
+  const [chars, imgs, teams, seasons, mysteries, showcase] = await Promise.all([
     api.listCharacters(), api.listArchive(), lore.listGroups(), lore.listSeasons(), lore.listMysteries(),
+    homeApi.showcaseSeasons().catch(() => []),
   ]);
   if (!ctx.isCurrent()) return;
   const featured = [...chars].sort((a, b) => (b.published_at || '').localeCompare(a.published_at || '')).slice(0, 8);
@@ -60,24 +64,13 @@ export async function home(main, _, ctx) {
   const stat = (n, key, href) => `<a class="hero-stat" href="#${href}"><strong>${n}</strong><span>${h(t(key))}</span></a>`;
   const head = (key, href) => `<header class="section-head"><h2 class="section-title">${h(t(key))}</h2>${href ? `<a href="#${href}" class="more">${h(t('common.viewAll'))} <span aria-hidden="true">→</span></a>` : ''}</header>`;
   main.innerHTML = `
-    <section class="hero home-hero">
-      ${heroPath ? `<div class="hero-bg" data-bg="${h(heroPath)}"></div>` : '<div class="hero-bg hero-bg-empty"></div>'}
-      <div class="hero-shade"></div>
-      <div class="hero-copy wrap">
-        <p class="eyebrow">${h(t('brand.tagline'))}</p>
-        <h1 class="display display-xl">${h(t('home.title'))}</h1>
-        <p class="lead">${h(t('home.lead'))}</p>
-        <div class="row-wrap hero-actions">
-          <a class="btn btn-primary btn-lg" href="#story">${h(t('home.readStory'))}</a>
-          <a class="btn btn-lg" href="#characters">${h(t('home.browseCharacters'))}</a>
-        </div>
-        <div class="hero-stats">
-          ${stat(seasons.length, 'nav.seasons', 'seasons')}${stat(chars.length, 'nav.characters', 'characters')}
-          ${stat(teams.length, 'nav.groups', 'groups')}${stat(imgs.length, 'nav.images', 'images')}
-        </div>
-      </div>
+    <div id="home-hero"></div>
+    <section class="wrap home-stats">
+      ${stat(seasons.length, 'nav.seasons', 'seasons')}${stat(chars.length, 'nav.characters', 'characters')}
+      ${stat(teams.length, 'nav.groups', 'groups')}${stat(imgs.length, 'nav.images', 'images')}
     </section>
-    ${latest ? `<section class="wrap section">
+    <section class="wrap section home-countdown" id="home-countdown"></section>
+    ${latest && !showcase.length ? `<section class="wrap section">
       ${head('home.latestSeason')}
       <a class="spotlight" href="#season/${h(latest.id)}">
         <div class="spotlight-media">${latest.cover_path ? `<img data-path="${h(latest.cover_path)}" alt="">` : '<span class="ph ph-wide"></span>'}</div>
@@ -108,6 +101,24 @@ export async function home(main, _, ctx) {
       ${head('home.latestImages', 'images')}
       ${imgs.length ? `<div class="grid-imgs">${imgs.slice(0, 6).map(imageCard).join('')}</div>` : emptyState(t('images.empty'))}
     </section>`;
+  // Cinematic seasons showcase (falls back to the classic hero when no season has artwork yet).
+  const heroEl = $('#home-hero', main);
+  if (showcase.length) renderShowcase(heroEl, showcase);
+  else {
+    heroEl.innerHTML = `<section class="hero home-hero">
+      ${heroPath ? `<div class="hero-bg" data-bg="${h(heroPath)}"></div>` : '<div class="hero-bg hero-bg-empty"></div>'}
+      <div class="hero-shade"></div>
+      <div class="hero-copy wrap">
+        <p class="eyebrow">${h(t('brand.tagline'))}</p>
+        <h1 class="display display-xl">${h(t('home.title'))}</h1>
+        <p class="lead">${h(t('home.lead'))}</p>
+        <div class="row-wrap hero-actions">
+          <a class="btn btn-primary btn-lg" href="#story">${h(t('home.readStory'))}</a>
+          <a class="btn btn-lg" href="#characters">${h(t('home.browseCharacters'))}</a>
+        </div>
+      </div></section>`;
+  }
+  homeCountdown($('#home-countdown', main));
   hydrateMedia(main);
 }
 

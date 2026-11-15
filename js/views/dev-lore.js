@@ -90,14 +90,15 @@ export function groupList(el, _, ctx) {
 }
 
 export async function groupEditor(el, id, ctx) {
-  const isNew = !id || id === 'new';
+  const isNew = !id || id === 'new' || id === 'new-team';
   const [g, chars, types, seasons] = await Promise.all([
     isNew ? null : lore.getGroup(id), api.listCharacters({ publishedOnly: false }), lore.listRelTypes(), lore.listSeasons({ publishedOnly: false }),
   ]);
   const events = (await Promise.all(seasons.map(s => lore.listEvents(s.id).then(evs => evs.map(e => ({ ...e, season: s })))))).flat();
   if (!ctx.isCurrent()) return;
   if (!isNew && !g) { el.innerHTML = `<p>${h(t('error.notFound'))}</p>`; return; }
-  const model = g || { name: '', status: '', description: '', story: '', history: '', goals: '', is_published: false, images: [], members: [], seasons: [], events: [] };
+  const model = g || { name: '', status: '', description: '', story: '', history: '', goals: '', is_published: false, images: [], members: [], seasons: [], events: [],
+    name_ar: '', tagline: '', tagline_ar: '', is_team: id === 'new-team' };
   let dirty = false; guard = () => dirty;
 
   el.innerHTML = `${editorHead('#dev/groups', t('dev.groups'), isNew ? t('dev.newGroup') : model.name, model.is_published)}
@@ -107,6 +108,14 @@ export async function groupEditor(el, id, ctx) {
         <label class="field"><span>${h(t('groups.status'))} <small class="muted">(${h(t('common.optional'))})</small></span>
           <input name="status" maxlength="60" list="dl-gstatus" value="${h(model.status || '')}" dir="auto" placeholder="${h(t('groups.statusPh'))}"></label>
         <datalist id="dl-gstatus">${['active', 'disbanded', 'destroyed', 'unknown'].map(k => `<option value="${h(t('groups.st.' + k))}">`).join('')}</datalist>`)}
+      ${panel('team.panel', `
+        <label class="check-row"><input type="checkbox" name="is_team" ${model.is_team ? 'checked' : ''}> <span><strong>${h(t('team.isTeam'))}</strong><small class="muted">${h(t('team.isTeamHelp'))}</small></span></label>
+        <div class="grid-2">
+          <label class="field"><span>${h(t('team.nameAr'))}</span><input name="name_ar" maxlength="200" value="${h(model.name_ar || '')}" dir="rtl"></label>
+          <span></span>
+          <label class="field"><span>${h(t('team.tagline'))}</span><input name="tagline" maxlength="300" value="${h(model.tagline || '')}" dir="ltr"></label>
+          <label class="field"><span>${h(t('team.taglineAr'))}</span><input name="tagline_ar" maxlength="300" value="${h(model.tagline_ar || '')}" dir="rtl"></label>
+        </div>`)}
       ${panel('groups.logo', '<div id="logo"></div>')}
       ${panel('groups.description', '<div id="ed-description"></div>', { req: true })}
       ${panel('groups.story', '<div id="ed-story"></div>')}
@@ -139,6 +148,7 @@ export async function groupEditor(el, id, ctx) {
 
   const collect = () => ({
     id: model.id, name: form.name.value, status: form.status.value,
+    name_ar: form.name_ar.value, tagline: form.tagline.value, tagline_ar: form.tagline_ar.value, is_team: form.is_team.checked,
     ...Object.fromEntries(Object.entries(eds).map(([k, e]) => [k, e.getHtml()])),
   });
   wireActions(el, {
@@ -214,7 +224,11 @@ export async function seasonEditor(el, id, ctx) {
           <label class="field"><span>${h(t('seasons.release'))}</span><input name="release_date" type="date" value="${h(model.release_date || '')}"></label>
           <label class="field"><span>${h(t('seasons.end'))}</span><input name="end_date" type="date" value="${h(model.end_date || '')}"></label>
         </div>`)}
-      ${panel('seasons.cover', '<div id="cover"></div>')}
+      ${panel('seasons.cover', `<div id="cover"></div><p class="muted small">${h(t('showcase.coverHelp'))}</p>`)}
+      ${panel('showcase.panel', `
+        <label class="check-row"><input type="checkbox" name="show_on_home" ${model.show_on_home !== false ? 'checked' : ''}> <span><strong>${h(t('showcase.onHome'))}</strong><small class="muted">${h(t('showcase.onHomeHelp'))}</small></span></label>
+        <label class="field"><span>${h(t('showcase.tagline'))} <small class="muted">(${h(t('common.optional'))})</small></span>
+          <input name="home_tagline" maxlength="300" value="${h(model.home_tagline || '')}" dir="auto" placeholder="${h(t('showcase.taglinePh'))}"></label>`)}
       ${panel('seasons.summary', '<div id="ed-summary"></div>', { req: true })}
       ${panel('seasons.story', '<div id="ed-story"></div>')}
       ${isNew ? panel('seasons.timeline', `<p class="muted small">${h(t('seasons.saveFirst'))}</p>`) : panel('seasons.timeline', `
@@ -248,6 +262,7 @@ export async function seasonEditor(el, id, ctx) {
 
   const collect = () => ({
     id: model.id, name: form.name.value, chapter_number: form.chapter_number.value, season_number: form.season_number.value,
+    show_on_home: form.show_on_home.checked, home_tagline: form.home_tagline.value,
     release_date: form.release_date.value, end_date: form.end_date.value,
     ...Object.fromEntries(Object.entries(eds).map(([k, e]) => [k, e.getHtml()])),
   });

@@ -11,6 +11,8 @@ import { seasonLabel } from '../components.js';
 import { go, render } from '../app.js';
 import { icon } from '../icons.js';
 import { openDevDialog, exitDevMode, devTimeLeft } from '../devmode.js';
+import * as homeApi from '../api-home.js';
+import { teamEmblem, teamName, otherName } from './onboarding.js';
 
 const empty = msg => `<div class="empty"><p class="muted">${h(msg)}</p></div>`;
 const STATUSES = ['open', 'partial', 'solved'];
@@ -107,6 +109,8 @@ export async function search(main, _, ctx) {
 // ─── Profile ───────────────────────────────────────────────────────────
 export async function profile(main) {
   const u = state.user;
+  const teams = await homeApi.listTeams().catch(() => []);
+  const myTeam = teams.find(x => x.id === state.teamId) || null;
   const draw = () => {
     main.innerHTML = `
       <section class="wrap profile-page">
@@ -121,6 +125,12 @@ export async function profile(main) {
           </div>
         </header>
         <div class="settings">
+          ${teams.length ? `<section class="setting-card team-setting">
+            ${myTeam ? teamEmblem(myTeam, 'team-emblem-sm') : `<div class="setting-ico">${icon('shield')}</div>`}
+            <div class="setting-main"><h2>${h(t('team.yours'))}</h2>
+              <p class="muted small" dir="auto">${myTeam ? h(teamName(myTeam)) + (otherName(myTeam) ? ' · ' + h(otherName(myTeam)) : '') : h(t('team.noneChosen'))}</p></div>
+            <a class="btn btn-small" href="#choose-team" id="change-team">${icon('edit', 15)} ${h(t(myTeam ? 'team.change' : 'team.pick'))}</a>
+          </section>` : ''}
           <section class="setting-card">
             <div class="setting-ico">${icon('globe')}</div>
             <div class="setting-main"><h2>${h(t('nav.language'))}</h2><p class="muted small">${h(t('profile.langHelp'))}</p></div>
@@ -151,6 +161,7 @@ export async function profile(main) {
           </section>
         </div>
       </section>`;
+    hydrateMedia(main);
     main.querySelectorAll('[data-lang]').forEach(b => b.onclick = () => { setLang(b.dataset.lang); render(); });
     $('#pw-form', main).onsubmit = async e => {
       e.preventDefault();

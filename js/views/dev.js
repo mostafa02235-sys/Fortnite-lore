@@ -18,9 +18,9 @@ import { exitDevMode, devTimeLeft } from '../devmode.js';
 
 const TABS = [
   ['', 'dev.overview', 'grid'], ['characters', 'dev.characters', 'user'], ['groups', 'dev.groups', 'shield'],
-  ['seasons', 'dev.seasons', 'calendar'], ['timeline', 'dev.timeline', 'clock'], ['stories', 'dev.stories', 'feather'],
+  ['seasons', 'dev.seasons', 'calendar'], ['showcase', 'dev.showcase', 'sparkle'], ['timeline', 'dev.timeline', 'clock'], ['stories', 'dev.stories', 'feather'],
   ['images', 'dev.images', 'image'], ['mysteries', 'dev.mysteries', 'help'], ['publishing', 'dev.publishing', 'send'],
-  ['labels', 'dev.labels', 'tag'],
+  ['teams', 'dev.teams', 'users'], ['countdown', 'dev.countdown', 'hourglass'], ['labels', 'dev.labels', 'tag'],
 ];
 
 let leaveGuard = null;
@@ -29,7 +29,6 @@ window.addEventListener('beforeunload', e => { if (leaveGuard?.() || dl.leaveGua
 export async function dashboard(main, sub = '', ctx) {
   leaveGuard = null; dl.resetGuard();
   const [section, id] = (sub || '').split('/');
-  if (section === 'teams') { go('dev/groups'); return; } // Teams were upgraded to Groups
   const tabs = state.isAdmin ? [...TABS, ['access', 'dev.access', 'key']] : TABS;
   const activeTab = { character: 'characters', image: 'images', group: 'groups', season: 'seasons', event: 'timeline', mystery: 'mysteries' }[section] ?? section;
   main.innerHTML = `
@@ -60,6 +59,7 @@ export async function dashboard(main, sub = '', ctx) {
     groups: dl.groupList, group: dl.groupEditor, seasons: dl.seasonList, season: dl.seasonEditor, event: dl.eventEditor,
     mysteries: dl.mysteryList, mystery: dl.mysteryEditor, labels: dl.labelsManager,
     stories: hub.stories, publishing: hub.publishing, timeline: hub.timeline,
+    showcase: hub.showcaseManager, countdown: hub.countdownManager, teams: hub.teamsManager,
   };
   const view = views[section];
   if (!view || (section === 'access' && !state.isAdmin)) { body.innerHTML = `<p>${h(t('error.notFound'))}</p>`; return; }

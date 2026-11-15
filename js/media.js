@@ -5,6 +5,9 @@ import { sb } from './supabase.js';
 import { MEDIA_BUCKET, MAX_IMAGE_BYTES } from './config.js';
 import { t } from './i18n.js';
 import { $$ } from './util.js';
+import { optimizeImage } from './optimize.js';
+
+export const USER_BUCKET = 'lore-user-media';
 
 const TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
 const cache = new Map(); // path -> { url, exp }
@@ -21,6 +24,7 @@ export function validateImage(file) {
 export async function uploadImage(file, folder) {
   const problem = validateImage(file);
   if (problem) throw new Error(problem);
+  file = await optimizeImage(file);   // downscale very large photos for faster mobile loading
   const path = `${folder}/${crypto.randomUUID()}.${TYPES[file.type]}`;
   const { error } = await sb.storage.from(MEDIA_BUCKET).upload(path, file, {
     contentType: file.type, cacheControl: '31536000', upsert: false,
@@ -29,30 +33,40 @@ export async function uploadImage(file, folder) {
   return path;
 }
 
-export async function removeFiles(paths) {
+export async function removeFiles(paths, bucket = MEDIA_BUCKET) {
   const list = (paths || []).filter(Boolean);
   if (!list.length) return;
-  list.forEach(p => cache.delete(p));
-  const { error } = await sb.storage.from(MEDIA_BUCKET).remove(list);
+  list.forEach(p => cache.delete(bucket + ':' + p));
+  const { error } = await sb.storage.from(bucket).remove(list);
   if (error) console.warn('storage remove failed', error);
 }
 
 /** Signed URLs for many paths at once; unreadable paths map to null. */
-export async function signedUrls(paths) {
+export async function signedUrls(paths, bucket = MEDIA_BUCKET) {
   const now = Date.now() / 1000;
-  const need = [...new Set(paths.filter(Boolean))].filter(p => !(cache.get(p)?.exp > now + 60));
+  const key = p => bucket + ':' + p;
+  const need = [...new Set(paths.filter(Boolean))].filter(p => !(cache.get(key(p))?.exp > now + 60));
   if (need.length) {
-    const { data, error } = await sb.storage.from(MEDIA_BUCKET).createSignedUrls(need, TTL);
+    const { data, error } = await sb.storage.from(bucket).createSignedUrls(need, TTL);
     if (!error && data) {
       for (const row of data) {
-        if (row.signedUrl && !row.error) cache.set(row.path, { url: row.signedUrl, exp: now + TTL });
+        if (row.signedUrl && !row.error) cache.set(key(row.path), { url: row.signedUrl, exp: now + TTL });
       }
     }
   }
   const out = {};
-  for (const p of paths) out[p] = cache.get(p)?.url || null;
+  for (const p of paths) out[p] = cache.get(key(p))?.url || null;
   return out;
 }
+
+/** Upload a file (Blob/File) into the signed-in user's private folder. */
+export async function uploadUserFile(userId, blob, ext, contentType) {
+  const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await sb.storage.from(USER_BUCKET).upload(path, blob, { contentType, cacheControl: '31536000', upsert: false });
+  if (error) throw error;
+  return path;
+}
+export const userUrls = paths => signedUrls(paths, USER_BUCKET);
 
 export async function urlFor(path) {
   if (!path) return null;

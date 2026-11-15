@@ -18,7 +18,7 @@ export async function saveRelType({ id, label_en, label_ar, sort_order = 0 }) {
 export async function deleteRelType(id) { ok(await sb.from('group_relationship_types').delete().eq('id', id)); }
 
 // ─── Groups ───────────────────────────────────────────────────────────
-const GROUP_LIST = 'id,name,status,logo_path,description,is_published,updated_at,published_at,members:group_relationships(count)';
+const GROUP_LIST = 'id,name,name_ar,tagline,tagline_ar,is_team,team_order,status,logo_path,description,is_published,updated_at,published_at,members:group_relationships(count)';
 
 export async function listGroups({ publishedOnly = true, search } = {}) {
   let q = sb.from('groups').select(GROUP_LIST).order('name');
@@ -46,6 +46,8 @@ export async function saveGroup(row) {
     description: row.description || '', story: row.story || '', history: row.history || '', goals: row.goals || '',
     is_published: !!row.is_published,
   };
+  for (const k of ['name_ar', 'tagline', 'tagline_ar']) if (k in row) data[k] = (row[k] || '').trim();
+  if ('is_team' in row) data.is_team = !!row.is_team;
   if (row.id) return ok(await sb.from('groups').update(data).eq('id', row.id).select().single());
   return ok(await sb.from('groups').insert(data).select().single());
 }
@@ -142,7 +144,7 @@ export function seasonCmp(a, b) {
   return n(a.chapter_number) - n(b.chapter_number) || n(a.season_number) - n(b.season_number)
     || String(a.release_date || '').localeCompare(String(b.release_date || '')) || String(a.name).localeCompare(String(b.name));
 }
-const SEASON_LIST = 'id,name,chapter_number,season_number,cover_path,release_date,end_date,summary,is_published,updated_at';
+const SEASON_LIST = 'id,name,chapter_number,season_number,cover_path,release_date,end_date,summary,is_published,updated_at,show_on_home,home_order,home_tagline';
 
 export async function listSeasons({ publishedOnly = true, search, chapter } = {}) {
   let q = sb.from('seasons').select(SEASON_LIST);
@@ -177,6 +179,8 @@ export async function saveSeason(row) {
     summary: row.summary || '', story: row.story || '', discoveries: row.discoveries || '', missions: row.missions || '',
     is_published: !!row.is_published,
   };
+  if ('show_on_home' in row) data.show_on_home = !!row.show_on_home;
+  if ('home_tagline' in row) data.home_tagline = (row.home_tagline || '').trim();
   if (row.id) return ok(await sb.from('seasons').update(data).eq('id', row.id).select().single());
   return ok(await sb.from('seasons').insert(data).select().single());
 }

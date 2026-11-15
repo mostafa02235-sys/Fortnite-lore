@@ -15,7 +15,34 @@ A fan encyclopedia of the Fortnite story, in **English (LTR)** and **Arabic (RTL
 | **Timeline** | Every event from every season in chronological order |
 | **Mysteries** | Open, partly answered and solved questions, optionally linked to a season |
 | **Search** | Searches characters, groups, seasons, events, images and mysteries |
-| **Profile** | Account, role, language, password, sign out |
+| **Profile** | Account, team, language, Developer Mode, password, sign out |
+| **Countdown** | A live countdown (days, hours, minutes, seconds) with your own title, date and image or video background |
+
+### Homepage seasons showcase
+
+The homepage opens with a cinematic carousel of seasons loaded from the **Seasons** table. Each slide shows the season's cover artwork, its chapter and season, a short description and an **Explore season** button.
+
+- **Controls:** arrows, indicators with an autoplay progress bar, keyboard ←/→, and swiping on touch screens. Arabic reverses the direction.
+- **Autoplay** pauses on hover, on focus and while the tab is hidden. It's off if the visitor prefers reduced motion.
+- **Loading:** artwork loads lazily, only the current slide and its neighbours.
+- **Which seasons appear:** published seasons that have a cover image and **Show in the homepage showcase** turned on (in the season editor or **Dashboard → Showcase**). Order them in **Dashboard → Showcase** by dragging or with ↑/↓.
+- **Artwork:** upload each season's own cover in its editor. Wide 16:9 images of at least 1920 px work best. The site never fills in stock or repeated images.
+
+### Countdown
+
+- **Personal countdowns:** every user can make one, with a title, a target date and time (in their own time zone) and a background:
+  - **Image:** JPG, PNG or WebP. Preview it, drag to reposition, zoom, and set how dark the overlay is.
+  - **Video:** MP4, WebM or MOV, up to 15 seconds and 30 MB. It plays muted on loop, pauses when off-screen, and shows a still frame if it can't play.
+- **Privacy:** settings are stored per user in `lore_countdowns`, and files go in the private bucket `lore-user-media/<user id>/`. Both are readable and writable only by their owner.
+- **Default countdown:** people without their own see the default, set in **Dashboard → Countdown**.
+- **Timing:** remaining time is recalculated from the target every second. Timers stop when you leave the page, so there are never duplicate intervals.
+
+### Teams (first sign-in)
+
+- **When it appears:** after their first sign-in, users must answer **"Which team are you with?" / «مع أي فريق أنت؟»** before using the site. Their choice is saved in `lore_profiles`, and they can change it later from **Profile**.
+- **Which teams are offered:** published groups marked **Offer as a team choice**, in the order set in **Dashboard → Teams**. New teams appear automatically.
+- **Starting teams:** the migration marks The Seven / السبعة, Imagined Order / الايماجند أوردر and The Last Reality / الواقع الأخير as teams. It reuses any existing group with the same name and never duplicates one.
+- **Logos:** upload them in each group's editor.
 
 All long-form fields use the built-in rich-text editor: headings, bold and italic, lists, quotes, links, images and right-to-left or left-to-right paragraphs. None of them has a length limit.
 
@@ -41,7 +68,7 @@ To end every active session after changing the code, run `delete from public.lor
 
 ### Developer dashboard (`#dev`)
 
-The dashboard has these sections: Overview (stats, waiting drafts, recent changes, quick create), Characters, Groups, Seasons, Timeline, Stories (every long-form story with its word count), Image Archive, Mysteries, Publishing (publish or unpublish anything in one place), Relationship labels, and Access (admins only: active Developer Mode sessions and admin roles).
+The dashboard has these sections: Overview (stats, waiting drafts, recent changes, quick create), Characters, Groups, Seasons, Showcase (homepage carousel order and visibility), Timeline, Stories (every long-form story with its word count), Image Archive, Mysteries, Publishing (publish or unpublish anything in one place), Teams (which groups are offered at first sign-in, with member counts), Countdown (the site default), Relationship labels, and Access (admins only: active Developer Mode sessions and admin roles).
 
 Every item can be created, edited, previewed, saved as a draft, published, unpublished and deleted.
 
@@ -77,6 +104,12 @@ Migrations, applied in order:
    - `image_archive.season_id`
 
 3. `20261115160000_developer_mode.sql`: server-side Developer Mode (hashed access code, rate limiting, 8-hour sessions). `lore_is_developer()` now means "has an active Developer Mode session".
+
+4. `20261115180000_showcase_countdown_teams.sql` adds:
+   - showcase fields on `seasons`
+   - team fields on `groups`, plus the three starting teams
+   - `lore_profiles`, `lore_countdowns` and `lore_site_settings`
+   - the private `lore-user-media` bucket
 
 All migrations only add things, and running them twice does no harm. The older `teams` table and `characters.team_id` are kept so no data is lost. Migration 2 copies their contents into `groups` and `group_relationships` with the same ids, so old `#team/…` links redirect to the group page.
 
@@ -116,6 +149,7 @@ UI tests run against the in-memory database, using Python Playwright and Chrome:
 ```bash
 python3 tests/ui_test.py .        # characters, image archive, auth, access, XSS
 python3 tests/lore_test.py        # groups, labels, seasons, timeline, mysteries, search, profile
+python3 tests/features_test.py    # showcase, countdown (image/video, privacy, timers), team onboarding
 ```
 
 ---

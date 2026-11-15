@@ -1,6 +1,6 @@
 // Developer dashboard hub: overview, stories, timeline and publishing views.
 import { t } from '../i18n.js';
-import { h, $, $$, toast, errMsg, fmtDate, wordCount, debounce } from '../util.js';
+import { h, $, $$, toast, errMsg, fmtDate, wordCount, debounce, modal } from '../util.js';
 import { hydrateMedia } from '../media.js';
 import * as api from '../api.js';
 import * as lore from '../api-lore.js';
@@ -8,6 +8,10 @@ import { state } from '../state.js';
 import { icon } from '../icons.js';
 import { seasonLabel } from '../components.js';
 import { timelineManager } from './dev-lore.js';
+import * as homeApi from '../api-home.js';
+import { renderShowcase } from './showcase.js';
+import { mountCountdown } from './countdown.js';
+import { teamEmblem } from './onboarding.js';
 
 export const TYPES = {
   character: { icon: 'user', label: 'nav.characters', edit: id => `#dev/character/${id}`, view: id => `#character/${id}`, publish: api.setCharacterPublished },
@@ -162,4 +166,150 @@ export async function timeline(el, _, ctx) {
   };
   $('#tl-season', el).onchange = e => load(e.target.value);
   await load(pick);
+}
+
+// ─── Showcase: which seasons appear in the homepage carousel, and in what order ─
+export async function showcaseManager(el, _, ctx) {
+  let rows = await homeApi.allShowcaseSeasons();
+  if (!ctx.isCurrent()) return;
+  el.innerHTML = `
+    <div class="toolbar"><div><h1 class="page-title">${h(t('dev.showcase'))}</h1><p class="muted">${h(t('showcase.devLead'))}</p></div>
+      <div class="row-wrap"><button class="btn" id="sc-preview">${icon('eye', 16)} ${h(t('dev.preview'))}</button>
+      <a class="btn btn-primary" href="#dev/season/new">${icon('plus', 16)} ${h(t('dev.newSeason'))}</a></div></div>
+    <ol class="ev-list sc-list" id="sc-list"></ol>`;
+  const list = $('#sc-list', el);
+  const draw = () => {
+    list.innerHTML = rows.length ? rows.map((s, i) => {
+      const live = s.is_published && s.show_on_home && s.cover_path;
+      const why = !s.cover_path ? t('showcase.needsCover') : !s.is_published ? t('showcase.needsPublish') : !s.show_on_home ? t('showcase.hidden') : '';
+      return `<li class="ev-row sc-row ${live ? '' : 'is-off'}" draggable="true" data-id="${h(s.id)}">
+        <span class="ev-handle" aria-hidden="true">⋮⋮</span>
+        <span class="ev-num">${i + 1}</span>
+        <div class="thumb thumb-wide">${s.cover_path ? `<img data-path="${h(s.cover_path)}" alt="">` : ''}</div>
+        <div class="ev-main"><strong dir="auto">${h(s.name)}</strong>
+          <small class="${why ? 'warn' : 'muted'}">${h(why || [seasonLabel(s), t('showcase.live')].filter(Boolean).join(' · '))}</small></div>
+        <div class="link-actions">
+          <label class="switch" title="${h(t('showcase.onHome'))}"><input type="checkbox" data-home ${s.show_on_home ? 'checked' : ''}><span aria-hidden="true"></span><span class="sr-only">${h(t('showcase.onHome'))}</span></label>
+          ${i > 0 ? `<button type="button" class="icon-btn" data-mv="-1" aria-label="${h(t('seasons.moveUp'))}">↑</button>` : ''}
+          ${i < rows.length - 1 ? `<button type="button" class="icon-btn" data-mv="1" aria-label="${h(t('seasons.moveDown'))}">↓</button>` : ''}
+          <a class="btn btn-small" href="#dev/season/${h(s.id)}">${icon('edit', 15)} ${h(t('common.edit'))}</a>
+        </div></li>`;
+    }).join('') : `<li class="empty"><p class="muted">${h(t('seasons.empty'))}</p></li>`;
+    hydrateMedia(list);
+    $$('[data-home]', list).forEach(cb => cb.onchange = async () => {
+      const s = rows.find(x => x.id === cb.closest('[data-id]').dataset.id);
+      try { await homeApi.setShowOnHome(s.id, cb.checked); s.show_on_home = cb.checked; toast(t('dev.saved')); draw(); }
+      catch (e) { cb.checked = !cb.checked; toast(errMsg(e), 'error'); }
+    });
+    $$('[data-mv]', list).forEach(b => b.onclick = () => {
+      const i = rows.findIndex(x => x.id === b.closest('[data-id]').dataset.id), j = i + +b.dataset.mv;
+      [rows[i], rows[j]] = [rows[j], rows[i]]; persist();
+    });
+    let dragId = null;
+    $$('.sc-row', list).forEach(li => {
+      li.ondragstart = e => { dragId = li.dataset.id; li.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; };
+      li.ondragend = () => li.classList.remove('dragging');
+      li.ondragover = e => { e.preventDefault(); li.classList.add('drop-target'); };
+      li.ondragleave = () => li.classList.remove('drop-target');
+      li.ondrop = e => {
+        e.preventDefault(); li.classList.remove('drop-target');
+        const from = rows.findIndex(x => x.id === dragId), to = rows.findIndex(x => x.id === li.dataset.id);
+        if (from < 0 || from === to) return;
+        const [m] = rows.splice(from, 1); rows.splice(to, 0, m); persist();
+      };
+    });
+  };
+  const persist = async () => {
+    draw();
+    try { await homeApi.saveShowcaseOrder(rows.map(r => r.id)); rows.forEach((r, i) => { r.home_order = i; }); toast(t('showcase.orderSaved')); }
+    catch (e) { toast(errMsg(e), 'error'); }
+  };
+  $('#sc-preview', el).onclick = () => {
+    const live = rows.filter(s => s.is_published && s.show_on_home && s.cover_path);
+    const box = document.createElement('div');
+    if (live.length) renderShowcase(box, live, { preview: true });
+    else box.innerHTML = `<div class="empty"><p class="muted">${h(t('showcase.nothingLive'))}</p></div>`;
+    modal({ title: t('dev.preview'), body: box, wide: true, className: 'modal-full' });
+  };
+  draw();
+}
+
+// ─── Default countdown (used by everyone who hasn't made their own) ───
+export async function countdownManager(el, _, ctx) {
+  const def = await homeApi.defaultCountdown();
+  if (!ctx.isCurrent()) return;
+  const local = iso => { if (!iso) return ''; const d = new Date(iso); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+  el.innerHTML = `
+    <div class="toolbar"><div><h1 class="page-title">${h(t('dev.countdown'))}</h1><p class="muted">${h(t('countdown.devLead'))}</p></div></div>
+    <form class="panel" id="cdf">
+      <div class="grid-2">
+        <label class="field"><span>${h(t('countdown.titleLabel'))}</span><input name="title" maxlength="120" value="${h(def?.title || '')}" dir="auto"></label>
+        <label class="field"><span>${h(t('countdown.target'))} <em class="req">*</em></span><input name="target" type="datetime-local" value="${local(def?.target_at)}" required></label>
+      </div>
+      <div class="row-wrap"><button class="btn btn-primary">${icon('check', 16)} ${h(t('common.save'))}</button>
+        ${def ? `<button type="button" class="btn btn-ghost btn-danger-text" id="cd-clear">${h(t('countdown.clearDefault'))}</button>` : ''}</div>
+    </form>
+    <h2 class="kicker">${h(t('dev.preview'))}</h2>
+    <div id="cd-prev" class="cd-preview cd-preview-dev"></div>`;
+  const f = $('#cdf', el);
+  const draw = () => mountCountdown($('#cd-prev', el), { title: f.title.value, target_at: f.target.value ? new Date(f.target.value).toISOString() : null, bg_type: 'none', overlay: 0.45 });
+  f.title.oninput = draw; f.target.onchange = draw; draw();
+  f.onsubmit = async e => {
+    e.preventDefault();
+    if (!f.target.value) return toast(t('countdown.needDate'), 'error');
+    try { await homeApi.saveDefaultCountdown({ title: f.title.value.trim(), target_at: new Date(f.target.value).toISOString() }); toast(t('dev.saved')); }
+    catch (ex) { toast(errMsg(ex), 'error'); }
+  };
+  const clr = $('#cd-clear', el);
+  if (clr) clr.onclick = async () => {
+    try { await homeApi.saveDefaultCountdown({}); toast(t('dev.saved')); countdownManager(el, _, ctx); } catch (ex) { toast(errMsg(ex), 'error'); }
+  };
+}
+
+// ─── Teams offered during onboarding ──────────────────────────────────
+export async function teamsManager(el, _, ctx) {
+  const [groups, counts] = await Promise.all([homeApi.allGroupsForTeams(), homeApi.teamCounts().catch(() => ({}))]);
+  if (!ctx.isCurrent()) return;
+  let teams = groups.filter(g => g.is_team);
+  const others = groups.filter(g => !g.is_team);
+  el.innerHTML = `
+    <div class="toolbar"><div><h1 class="page-title">${h(t('dev.teams'))}</h1><p class="muted">${h(t('team.devLead'))}</p></div>
+      <a class="btn btn-primary" href="#dev/group/new-team">${icon('plus', 16)} ${h(t('team.new'))}</a></div>
+    <section class="panel"><h2 class="kicker">${h(t('team.offered'))}</h2>
+      <ol class="ev-list" id="tm-list"></ol></section>
+    ${others.length ? `<section class="panel"><h2 class="kicker">${h(t('team.otherGroups'))}</h2>
+      <ul class="ev-list">${others.map(g => `<li class="ev-row" data-id="${h(g.id)}">
+        ${teamEmblem(g, 'team-emblem-xs')}<div class="ev-main"><strong dir="auto">${h(g.name)}</strong><small class="muted">${h(g.is_published ? t('common.published') : t('common.draft'))}</small></div>
+        <div class="link-actions"><button class="btn btn-small" data-add>${icon('plus', 15)} ${h(t('team.offer'))}</button></div></li>`).join('')}</ul></section>` : ''}`;
+  const list = $('#tm-list', el);
+  const draw = () => {
+    list.innerHTML = teams.length ? teams.map((g, i) => `
+      <li class="ev-row" data-id="${h(g.id)}">
+        <span class="ev-num">${i + 1}</span>${teamEmblem(g, 'team-emblem-xs')}
+        <div class="ev-main"><strong dir="auto">${h(g.name)}${g.name_ar ? ` · <span dir="rtl">${h(g.name_ar)}</span>` : ''}</strong>
+          <small class="${g.is_published ? 'muted' : 'warn'}">${h(g.is_published ? t('team.members', { n: counts[g.id] || 0 }) : t('team.needsPublish'))}</small></div>
+        <div class="link-actions">
+          ${i > 0 ? `<button type="button" class="icon-btn" data-mv="-1" aria-label="${h(t('seasons.moveUp'))}">↑</button>` : ''}
+          ${i < teams.length - 1 ? `<button type="button" class="icon-btn" data-mv="1" aria-label="${h(t('seasons.moveDown'))}">↓</button>` : ''}
+          <a class="btn btn-small" href="#dev/group/${h(g.id)}">${icon('edit', 15)} ${h(t('common.edit'))}</a>
+          <button class="btn btn-small btn-ghost" data-remove>${h(t('team.unoffer'))}</button>
+        </div></li>`).join('') : `<li class="muted small empty-inline">${h(t('team.noneOffered'))}</li>`;
+    hydrateMedia(list);
+    $$('[data-mv]', list).forEach(b => b.onclick = async () => {
+      const i = teams.findIndex(x => x.id === b.closest('[data-id]').dataset.id), j = i + +b.dataset.mv;
+      [teams[i], teams[j]] = [teams[j], teams[i]]; draw();
+      try { await homeApi.saveTeamOrder(teams.map(x => x.id)); toast(t('dev.saved')); } catch (e) { toast(errMsg(e), 'error'); }
+    });
+    $$('[data-remove]', list).forEach(b => b.onclick = async () => {
+      const id = b.closest('[data-id]').dataset.id;
+      try { await homeApi.setIsTeam(id, false); toast(t('dev.saved')); teamsManager(el, _, ctx); } catch (e) { toast(errMsg(e), 'error'); }
+    });
+  };
+  $$('[data-add]', el).forEach(b => b.onclick = async () => {
+    const id = b.closest('[data-id]').dataset.id;
+    try { await homeApi.setIsTeam(id, true); await homeApi.saveTeamOrder([...teams.map(x => x.id), id]); toast(t('dev.saved')); teamsManager(el, _, ctx); }
+    catch (e) { toast(errMsg(e), 'error'); }
+  });
+  draw();
+  hydrateMedia(el);
 }

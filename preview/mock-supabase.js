@@ -3,7 +3,7 @@
 // simplified version of the database's Row Level Security rules.
 const T = ['teams', 'characters', 'character_images', 'image_archive', 'lore_user_roles', 'group_relationship_types', 'groups',
   'group_relationships', 'group_images', 'seasons', 'season_events', 'season_characters', 'season_groups', 'season_images',
-  'season_references', 'event_characters', 'event_groups', 'event_images', 'mysteries', 'lore_dev_sessions'];
+  'season_references', 'event_characters', 'event_groups', 'event_images', 'mysteries', 'lore_dev_sessions', 'lore_profiles', 'lore_countdowns', 'lore_site_settings'];
 const db = Object.fromEntries(T.map(t => [t, []]));
 const files = new Map();
 const uid = () => crypto.randomUUID();
@@ -24,7 +24,7 @@ const visible = (t, r) => {
   switch (t) {
     case 'characters': case 'image_archive': case 'groups': case 'seasons': case 'mysteries': return r.is_published;
     case 'character_images': return pub('characters', r.character_id);
-    case 'lore_user_roles': case 'lore_dev_sessions': return r.user_id === M.user.id;
+    case 'lore_user_roles': case 'lore_dev_sessions': case 'lore_profiles': case 'lore_countdowns': return r.user_id === M.user.id;
     case 'group_relationships': return pub('groups', r.group_id) && pub('characters', r.character_id);
     case 'group_images': return pub('groups', r.group_id);
     case 'season_events': case 'season_images': case 'season_references': return pub('seasons', r.season_id);
@@ -93,7 +93,21 @@ const CHECKS = {
   mysteries: r => r.is_published && !String(r.body || '').trim() && 'mysteries_publish_requires_body',
 };
 const UNIQUE = { teams: ['name'], groups: ['name'], group_relationship_types: ['label_en'] };
-const PK = { season_characters: ['season_id', 'character_id'], season_groups: ['season_id', 'group_id'],
+// Who may write a row (mirrors the RLS policies).
+const isTeam = id => { const g = find('groups', id); return !!g && g.is_team && g.is_published; };
+const canWrite = (t, r) => {
+  if (!M.signedIn) return false;
+  if (t === 'lore_profiles') return r.user_id === M.user.id && (!r.team_id || isTeam(r.team_id));
+  if (t === 'lore_countdowns') return r.user_id === M.user.id && [r.bg_path, r.poster_path].every(p => !p || p.startsWith(M.user.id + '/'));
+  if (t === 'lore_dev_sessions' || t === 'lore_user_roles') return false;
+  return isDev();
+};
+const DEFAULTS = {
+  groups: { name_ar: '', tagline: '', tagline_ar: '', is_team: false, team_order: 0 },
+  seasons: { show_on_home: true, home_order: 0, home_tagline: '' },
+  lore_countdowns: { title: '', bg_type: 'none', bg_path: null, poster_path: null, focal_x: 50, focal_y: 50, zoom: 1, overlay: 0.45 },
+};
+const PK = { lore_profiles: ['user_id'], lore_countdowns: ['user_id'], lore_site_settings: ['key'], season_characters: ['season_id', 'character_id'], season_groups: ['season_id', 'group_id'],
   event_characters: ['event_id', 'character_id'], event_groups: ['event_id', 'group_id'], event_images: ['event_id', 'image_id'] };
 const denied = { data: null, error: { message: 'new row violates row-level security policy', code: '42501' } };
 
@@ -148,25 +162,26 @@ class Q {
     const t = this.t, tab = db[t];
     let rows;
     if (this.op === 'insert' || this.op === 'upsert') {
-      if (!isDev()) return denied;
       rows = [];
       for (const v of [].concat(this.val)) {
         const pk = PK[t];
         const hit = pk && tab.find(x => pk.every(k => x[k] === v[k]));
-        if (hit) { Object.assign(hit, v); rows.push(hit); continue; }
-        const r = this.stamp({ id: uid(), created_at: now(), updated_at: now(), uploaded_at: now(), ...v });
+        if (!canWrite(t, { ...(hit || {}), ...v })) return denied;
+        if (hit) { Object.assign(hit, v, { updated_at: now() }); rows.push(hit); continue; }
+        const r = this.stamp({ id: uid(), created_at: now(), updated_at: now(), uploaded_at: now(), ...(DEFAULTS[t] || {}), ...v });
         const e = this.check(r); if (e) return { data: null, error: e };
         tab.push(r); rows.push(r);
       }
     } else if (this.op === 'update') {
-      rows = isDev() ? tab.filter(r => this.f.every(f => f(r))) : [];
+      rows = tab.filter(r => visible(t, r) && this.f.every(f => f(r)) && canWrite(t, r));
       for (const r of rows) {
         const next = this.stamp({ ...r, ...this.val, updated_at: now() }, r);
+        if (!canWrite(t, next)) return denied;
         const e = this.check(next); if (e) return { data: null, error: e };
         Object.assign(r, next);
       }
     } else if (this.op === 'delete') {
-      rows = isDev() ? tab.filter(r => this.f.every(f => f(r))) : [];
+      rows = tab.filter(r => visible(t, r) && this.f.every(f => f(r)) && canWrite(t, r));
       if (t === 'group_relationship_types' && rows.some(r => db.group_relationships.some(g => g.relationship_type_id === r.id)))
         return { error: { message: 'update or delete violates foreign key constraint', code: '23503' } };
       for (const r of rows) { tab.splice(tab.indexOf(r), 1); cascade(t, r); }
@@ -208,6 +223,11 @@ export function createClient() {
         db.lore_dev_sessions.push({ user_id: M.user.id, started_at: now(), expires_at, email: M.user.email });
         return { data: { ok: true, expires_at }, error: null };
       }
+      if (fn === 'lore_team_counts') {
+        if (!isDev()) return { data: null, error: { message: 'not authorized', code: '42501' } };
+        const c = {}; db.lore_profiles.forEach(p => { if (p.team_id) c[p.team_id] = (c[p.team_id] || 0) + 1; });
+        return { data: Object.entries(c).map(([team_id, members]) => ({ team_id, members })), error: null };
+      }
       if (fn === 'lore_exit_dev_mode') { db.lore_dev_sessions = db.lore_dev_sessions.filter(x => x.user_id !== M.user.id); return { data: null, error: null }; }
       if (!isAdmin()) return { data: null, error: { message: 'not authorized', code: '42501' } };
       if (fn === 'lore_list_dev_sessions') return { data: db.lore_dev_sessions.map(x => ({ ...x })), error: null };
@@ -227,11 +247,19 @@ export function createClient() {
       updateUser: async () => ({ error: null }),
     },
     storage: {
-      from: () => ({
-        upload: async (path, file) => { if (!isDev()) return { error: { message: 'row-level security' } }; files.set(path, URL.createObjectURL(file)); return { error: null }; },
-        remove: async paths => { paths.forEach(p => files.delete(p)); return { error: null }; },
-        createSignedUrls: async paths => ({ data: paths.map(p => ({ path: p, signedUrl: files.get(p) || null, error: files.has(p) ? null : 'not found' })), error: null }),
-      }),
+      from: bucket => {
+        const own = p => bucket !== 'lore-user-media' || p.startsWith(M.user.id + '/');
+        return {
+          upload: async (path, file) => {
+            const ok = bucket === 'lore-user-media' ? M.signedIn && own(path) : isDev();
+            if (!ok) return { error: { message: 'new row violates row-level security policy' } };
+            if (M.failUploads) return { error: { message: 'Network error' } };
+            files.set(path, URL.createObjectURL(file)); M.uploads = (M.uploads || 0) + 1; return { error: null };
+          },
+          remove: async paths => { paths.filter(own).forEach(p => files.delete(p)); return { error: null }; },
+          createSignedUrls: async paths => ({ data: paths.map(p => ({ path: p, signedUrl: own(p) ? files.get(p) || null : null, error: own(p) && files.has(p) ? null : 'not found' })), error: null }),
+        };
+      },
     },
   };
 }

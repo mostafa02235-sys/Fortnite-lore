@@ -11,6 +11,10 @@ import * as dev from './views/dev.js';
 import * as grp from './views/groups.js';
 import * as sea from './views/seasons.js';
 import * as exp from './views/explore.js';
+import { countdownPage } from './views/countdown.js';
+import { teamPicker } from './views/onboarding.js';
+import { leavePage } from './lifecycle.js';
+import * as homeApi from './api-home.js';
 
 const routes = [
   [/^$/, pub.home],
@@ -31,6 +35,8 @@ const routes = [
   [/^mystery\/([\w-]+)$/, exp.mystery],
   [/^search$/, exp.search],
   [/^profile$/, exp.profile],
+  [/^countdown$/, countdownPage],
+  [/^choose-team$/, (main) => teamPicker(main, { mode: 'change', onDone: () => go('profile') })],
   [/^images$/, pub.images],
   [/^image\/([\w-]+)$/, pub.image],
   [/^login$/, auth.login, { open: true }],
@@ -47,6 +53,8 @@ export async function render() {
   const seq = ++renderSeq;
   const path = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
   const main = $('#main');
+  leavePage();                      // stop timers/observers of the previous page
+  document.body.classList.remove('is-onboarding');
   renderNav(path);
   closeMenu();
 
@@ -56,6 +64,12 @@ export async function render() {
 
   document.body.classList.toggle('is-auth', !state.user || /^(login|reset)$/.test(path));
   if (!opts.open && !state.user) { return auth.gate(main, path); }
+  // First sign-in: a team must be chosen before entering the platform.
+  if (state.user && state.needsTeam && !opts.open) {
+    try { await teamPicker(main, { mode: 'required', onDone: () => render() }); }
+    catch (e) { console.warn('team picker', e); state.needsTeam = false; render(); }
+    return;
+  }
   if (opts.dev && !state.isDev) { devLocked(main); return; }
 
   main.classList.remove('view-in');
@@ -96,6 +110,7 @@ const NAV = [
   ['explore', [
     ['', 'nav.home', 'home'], ['story', 'nav.story', 'book'], ['chapters', 'nav.chapters', 'layers', ['chapter']],
     ['seasons', 'nav.seasons', 'calendar', ['season', 'event']], ['timeline', 'nav.timeline', 'clock'],
+    ['countdown', 'nav.countdown', 'hourglass'],
   ]],
   ['encyclopedia', [
     ['characters', 'nav.characters', 'user', ['character']], ['groups', 'nav.groups', 'shield', ['group', 'teams', 'team']],
@@ -141,7 +156,19 @@ export async function loadUser(session) {
   try { state.roles = state.user ? await myRoles(state.user.id) : []; }
   catch (e) { console.warn(e); state.roles = []; }
   await loadDevSession();
+  await loadTeam();
   scheduleExpiry();
+}
+
+/** Chosen team; onboarding is required only if teams exist and none is chosen. */
+async function loadTeam() {
+  state.teamId = null; state.needsTeam = false;
+  if (!state.user) return;
+  try {
+    const [p, teams] = await Promise.all([homeApi.myProfile(state.user.id), homeApi.listTeams()]);
+    state.teamId = p?.team_id || null;
+    state.needsTeam = !state.teamId && teams.length > 0;
+  } catch (e) { console.warn('team check failed', e); }
 }
 
 // When the Developer Mode session runs out, refresh so dev controls disappear.

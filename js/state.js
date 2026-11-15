@@ -5,6 +5,8 @@ export const state = {
   user: null,
   roles: [],        // lore_user_roles (e.g. 'admin'), read from the database
   devUntil: null,   // expiry of the active Developer Mode session (server-side)
+  teamId: null,     // team chosen during onboarding (lore_profiles)
+  needsTeam: false, // true until a first-time user picks a team
   get isDev() { return !!this.devUntil && new Date(this.devUntil) > new Date(); },
   get isAdmin() { return this.isDev && this.roles.includes('admin'); },
 };
