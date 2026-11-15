@@ -3,6 +3,11 @@ import { h, $, $$, sanitizeHtml, excerpt, fmtDate, statusBadge, textToHtml, debo
 import { hydrateMedia } from '../media.js';
 import * as api from '../api.js';
 import { state } from '../state.js';
+import * as lore from '../api-lore.js';
+import { go } from '../app.js';
+
+const relName = ty => ty ? ((document.documentElement.lang === 'ar' && ty.label_ar) ? ty.label_ar : ty.label_en) : '';
+const chapterSeason = s => [s.chapter_number != null ? t('seasons.chapterN', { n: s.chapter_number }) : '', s.season_number != null ? t('seasons.seasonN', { n: s.season_number }) : ''].filter(Boolean).join(' · ');
 
 // ─── Shared pieces ─────────────────────────────────────────────────────
 export const coverOf = c => (c.images || []).find(i => i.is_primary) || (c.images || [])[0] || null;
@@ -26,7 +31,7 @@ export function characterCard(c) {
     <div class="card-char-img">${cover ? `<img ${imgAttrs(cover, c.name)}>` : `<div class="ph" aria-hidden="true">${h((c.name || '?').trim().charAt(0))}</div>`}</div>
     <div class="card-char-meta">
       <h3 dir="auto">${h(c.name)}</h3>
-      <div class="row-wrap">${statusBadge(c.status)}${c.team ? `<span class="muted small" dir="auto">${h(c.team.name)}</span>` : ''}
+      <div class="row-wrap">${statusBadge(c.status)}${c.team ? `<span class="muted small" dir="auto">${h(c.team.name)}</span>` : ''}${c.groupName ? `<span class="muted small" dir="auto">${h(c.groupName)}</span>` : ''}
       ${c.is_published === false ? `<span class="badge badge-draft">${h(t('common.draft'))}</span>` : ''}</div>
     </div></a>`;
 }
@@ -44,8 +49,8 @@ const emptyState = (title, body = '') => `<div class="empty"><h2>${h(title)}</h2
 // ─── Home ──────────────────────────────────────────────────────────────
 export async function home(main, _, ctx) {
   main.innerHTML = loading();
-  const [chars, imgs, teams] = await Promise.all([
-    api.listCharacters(), api.listArchive(), api.listTeams(),
+  const [chars, imgs, teams, seasons] = await Promise.all([
+    api.listCharacters(), api.listArchive(), lore.listGroups(), lore.listSeasons(),
   ]);
   if (!ctx.isCurrent()) return;
   const featured = [...chars].sort((a, b) => (b.published_at || '').localeCompare(a.published_at || '')).slice(0, 8);
@@ -59,11 +64,18 @@ export async function home(main, _, ctx) {
         <h1 class="display display-xl">${h(t('home.title'))}</h1>
         <p class="lead">${h(t('home.lead'))}</p>
         <div class="row-wrap">
-          <a class="btn btn-primary" href="#characters">${h(t('home.browseCharacters'))}</a>
-          <a class="btn" href="#images">${h(t('home.browseImages'))}</a>
+          <a class="btn btn-primary" href="#story">${h(t('home.readStory'))}</a>
+          <a class="btn" href="#characters">${h(t('home.browseCharacters'))}</a>
+          <a class="btn" href="#timeline">${h(t('nav.timeline'))}</a>
         </div>
       </div>
     </section>
+    ${seasons.length ? `<section class="wrap section">
+      <header class="section-head"><h2 class="display">${h(t('nav.seasons'))}</h2><a href="#seasons" class="more">${h(t('common.viewAll'))} →</a></header>
+      <div class="season-strip">${seasons.slice(-8).reverse().map(x => `<a class="season-chip" href="#season/${h(x.id)}">
+        ${x.cover_path ? `<img data-path="${h(x.cover_path)}" alt="">` : '<span class="ph ph-wide"></span>'}
+        <span class="season-chip-cap"><small>${h(chapterSeason(x))}</small><strong dir="auto">${h(x.name)}</strong></span></a>`).join('')}</div>
+    </section>` : ''}
     <section class="wrap section">
       <header class="section-head"><h2 class="display">${h(t('home.featured'))}</h2><a href="#characters" class="more">${h(t('common.viewAll'))} →</a></header>
       ${featured.length ? `<div class="grid-chars">${featured.map(characterCard).join('')}</div>` : emptyState(t('characters.empty'))}
@@ -73,18 +85,18 @@ export async function home(main, _, ctx) {
       ${imgs.length ? `<div class="grid-imgs">${imgs.slice(0, 6).map(imageCard).join('')}</div>` : emptyState(t('images.empty'))}
     </section>
     ${teams.length ? `<section class="wrap section">
-      <header class="section-head"><h2 class="display">${h(t('nav.teams'))}</h2><a href="#teams" class="more">${h(t('common.viewAll'))} →</a></header>
+      <header class="section-head"><h2 class="display">${h(t('nav.groups'))}</h2><a href="#groups" class="more">${h(t('common.viewAll'))} →</a></header>
       <div class="team-strip">${teams.slice(0, 8).map(teamChip).join('')}</div></section>` : ''}`;
   hydrateMedia(main);
 }
 
-const teamChip = tm => `<a class="team-chip" href="#team/${h(tm.id)}"><strong dir="auto">${h(tm.name)}</strong>
-  <span class="muted small">${h(t('teams.count', { n: tm.characters?.[0]?.count ?? 0 }))}</span></a>`;
+const teamChip = g => `<a class="team-chip" href="#group/${h(g.id)}"><strong dir="auto">${h(g.name)}</strong>
+  <span class="muted small">${h(t('groups.memberCount', { n: g.members?.[0]?.count ?? 0 }))}</span></a>`;
 
 // ─── Character list ────────────────────────────────────────────────────
 export async function characters(main, _, ctx) {
   main.innerHTML = loading();
-  const teams = await api.listTeams();
+  const teams = await lore.listGroups();
   if (!ctx.isCurrent()) return;
   main.innerHTML = `
     <section class="wrap page-head">
@@ -96,8 +108,8 @@ export async function characters(main, _, ctx) {
           <option value="">${h(t('characters.anyStatus'))}</option>
           ${['alive', 'dead', 'unknown'].map(s => `<option value="${s}">${h(t('status.' + s))}</option>`).join('')}
         </select>
-        <select name="team" aria-label="${h(t('characters.team'))}">
-          <option value="">${h(t('characters.anyTeam'))}</option>
+        <select name="team" aria-label="${h(t('nav.groups'))}">
+          <option value="">${h(t('characters.anyGroup'))}</option>
           ${teams.map(tm => `<option value="${h(tm.id)}">${h(tm.name)}</option>`).join('')}
         </select>
       </form>
@@ -105,7 +117,12 @@ export async function characters(main, _, ctx) {
     <section class="wrap section" id="results">${loading()}</section>`;
   const form = $('#filters', main);
   const run = async () => {
-    const list = await api.listCharacters({ search: form.q.value.trim(), status: form.status.value, teamId: form.team.value });
+    let list = await api.listCharacters({ search: form.q.value.trim(), status: form.status.value });
+    if (form.team.value) {
+      const g = await lore.getGroup(form.team.value);
+      const ids = new Set((g?.members || []).map(m => m.character.id));
+      list = list.filter(c => ids.has(c.id));
+    }
     if (!ctx.isCurrent()) return;
     const box = $('#results', main);
     box.innerHTML = list.length ? `<div class="grid-chars">${list.map(characterCard).join('')}</div>` : emptyState(t('characters.empty'));
@@ -119,10 +136,12 @@ export async function characters(main, _, ctx) {
 // ─── Character profile ─────────────────────────────────────────────────
 export async function character(main, id, ctx) {
   main.innerHTML = loading();
-  const [c, related] = await Promise.all([api.getCharacter(id), api.listArchive({ characterId: id })]);
+  const [c, related, groups, appear] = await Promise.all([
+    api.getCharacter(id), api.listArchive({ characterId: id }), lore.characterGroups(id), lore.characterAppearances(id),
+  ]);
   if (!ctx.isCurrent()) return;
   if (!c) { main.innerHTML = `<section class="wrap">${emptyState(t('error.notFound'))}</section>`; return; }
-  renderCharacterProfile(main, c, { related });
+  renderCharacterProfile(main, { ...c, groups, appear }, { related });
 }
 
 /** Also used by the developer preview (images may carry a local _url). */
@@ -138,11 +157,12 @@ export function renderCharacterProfile(el, c, { related = [], preview = false } 
         <div class="wrap profile-hero-inner">
           <figure class="profile-portrait">${cover ? `<img ${imgAttrs(cover, cover.image_name || c.name)}>` : `<div class="ph">${h((c.name || '?').charAt(0))}</div>`}</figure>
           <div class="profile-id">
-            <p class="eyebrow">${c.team ? (preview ? h(c.team.name) : `<a href="#team/${h(c.team.id)}">${h(c.team.name)}</a>`) : h(t('characters.noTeam'))}</p>
+            <p class="eyebrow">${(c.groups || []).length ? c.groups.slice(0, 3).map(r => preview ? h(r.group.name) : `<a href="#group/${h(r.group.id)}">${h(r.group.name)}</a>`).join(' · ') : h(t('characters.noGroup'))}</p>
             <h1 class="display display-xl" dir="auto">${h(c.name)}</h1>
             <dl class="facts">
               <div><dt>${h(t('characters.status'))}</dt><dd>${statusBadge(c.status)}</dd></div>
-              <div><dt>${h(t('characters.team'))}</dt><dd dir="auto">${h(c.team?.name || t('characters.noTeam'))}</dd></div>
+              <div><dt>${h(t('nav.groups'))}</dt><dd dir="auto">${h(String((c.groups || []).length))}</dd></div>
+              ${c.appear?.seasons?.length ? `<div><dt>${h(t('nav.seasons'))}</dt><dd>${c.appear.seasons.length}</dd></div>` : ''}
               ${c.updated_at ? `<div><dt>${h(t('common.updated'))}</dt><dd>${h(fmtDate(c.updated_at))}</dd></div>` : ''}
             </dl>
             ${state.isDev && !preview && c.id ? `<a class="btn btn-small" href="#dev/character/${h(c.id)}">${h(t('common.edit'))}</a>` : ''}
@@ -161,6 +181,19 @@ export function renderCharacterProfile(el, c, { related = [], preview = false } 
           <div class="prose prose-small" dir="auto" id="cover-story"></div>
         </aside>` : ''}
       </div>
+      ${(c.groups || []).length ? `<section class="wrap section">
+        <h2 class="display">${h(t('characters.groups'))}</h2>
+        <div class="rel-cards">${c.groups.map(r => `
+          ${preview ? '<div' : `<a href="#group/${h(r.group.id)}"`} class="rel-card">
+            <span class="rel-logo">${r.group.logo_path ? `<img data-path="${h(r.group.logo_path)}" alt="">` : h(r.group.name.charAt(0))}</span>
+            <span><strong dir="auto">${h(r.group.name)}</strong><small class="badge">${h(relName(r.type))}</small>${r.note ? `<small class="muted" dir="auto">${h(r.note)}</small>` : ''}</span>
+          ${preview ? '</div>' : '</a>'}`).join('')}</div></section>` : ''}
+      ${c.appear && (c.appear.seasons.length || c.appear.events.length) ? `<section class="wrap section">
+        <h2 class="display">${h(t('characters.appearances'))}</h2>
+        <div class="two-col">
+          ${c.appear.seasons.length ? `<div class="side-card"><h3 class="kicker">${h(t('nav.seasons'))}</h3><ul class="plain-list">${c.appear.seasons.map(x => `<li><a href="#season/${h(x.id)}"><strong dir="auto">${h(x.name)}</strong></a><small class="muted">${h(chapterSeason(x))}</small>${x.note ? `<small dir="auto">${h(x.note)}</small>` : ''}</li>`).join('')}</ul></div>` : ''}
+          ${c.appear.events.length ? `<div class="side-card"><h3 class="kicker">${h(t('seasons.events'))}</h3><ul class="plain-list">${c.appear.events.map(e => `<li><a href="#event/${h(e.id)}"><strong dir="auto">${h(e.title)}</strong></a><small class="muted" dir="auto">${h(e.season.name)}</small></li>`).join('')}</ul></div>` : ''}
+        </div></section>` : ''}
       ${gallery.length ? `<section class="wrap section">
         <h2 class="display">${h(t('characters.gallery'))}</h2>
         <div class="gallery">${gallery.map((g, i) => `
@@ -189,7 +222,8 @@ function lightbox(img) {
 }
 
 // ─── Teams ─────────────────────────────────────────────────────────────
-export async function teams(main, _, ctx) {
+export async function teams() { go('groups'); }
+async function legacyTeams(main, _, ctx) {
   main.innerHTML = loading();
   const list = await api.listTeams();
   if (!ctx.isCurrent()) return;
@@ -204,7 +238,8 @@ export async function teams(main, _, ctx) {
     </section>`;
 }
 
-export async function team(main, id, ctx) {
+export async function team(main, id) { go('group/' + id); }
+async function legacyTeam(main, id, ctx) {
   main.innerHTML = loading();
   const tm = await api.getTeam(id);
   if (!ctx.isCurrent()) return;
@@ -284,6 +319,8 @@ export function renderImageDetail(el, rec, { preview = false } = {}) {
             <dl class="facts facts-col">
               ${rec.character ? `<div><dt>${h(t('images.character'))}</dt><dd dir="auto">${charLink}</dd></div>` : ''}
               ${rec.event_name ? `<div><dt>${h(t('images.event'))}</dt><dd dir="auto">${h(rec.event_name)}</dd></div>` : ''}
+              ${(rec.events || []).filter(e => e.event).length ? `<div><dt>${h(t('seasons.events'))}</dt><dd class="chip-row">${rec.events.filter(e => e.event).map(e => preview ? `<span class="tag" dir="auto">${h(e.event.title)}</span>` : `<a class="tag" href="#event/${h(e.event.id)}" dir="auto">${h(e.event.title)}</a>`).join('')}</dd></div>` : ''}
+              ${rec.season ? `<div><dt>${h(t('seasons.season'))}</dt><dd dir="auto">${preview ? h(rec.season.name) : `<a href="#season/${h(rec.season.id)}">${h(rec.season.name)}</a>`}</dd></div>` : ''}
               ${rec.chapter ? `<div><dt>${h(t('images.chapter'))}</dt><dd dir="auto">${h(rec.chapter)}</dd></div>` : ''}
               <div><dt>${h(t('images.uploaded'))}</dt><dd>${h(fmtDate(rec.uploaded_at || new Date().toISOString()))}</dd></div>
             </dl>

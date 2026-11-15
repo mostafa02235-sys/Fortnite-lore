@@ -6,13 +6,29 @@ import { myRoles } from './api.js';
 import * as pub from './views/public.js';
 import * as auth from './views/auth.js';
 import * as dev from './views/dev.js';
+import * as grp from './views/groups.js';
+import * as sea from './views/seasons.js';
+import * as exp from './views/explore.js';
 
 const routes = [
   [/^$/, pub.home],
   [/^characters$/, pub.characters],
   [/^character\/([\w-]+)$/, pub.character],
-  [/^teams$/, pub.teams],
-  [/^team\/([\w-]+)$/, pub.team],
+  [/^teams$/, pub.teams],              // legacy → groups
+  [/^team\/([\w-]+)$/, pub.team],      // legacy → group
+  [/^groups$/, grp.groups],
+  [/^group\/([\w-]+)$/, grp.group],
+  [/^story$/, sea.storyArchive],
+  [/^chapters$/, sea.chapters],
+  [/^chapter\/(\d+)$/, sea.chapter],
+  [/^seasons$/, sea.seasons],
+  [/^season\/([\w-]+)$/, sea.season],
+  [/^event\/([\w-]+)$/, sea.event],
+  [/^timeline$/, sea.timeline],
+  [/^mysteries$/, exp.mysteries],
+  [/^mystery\/([\w-]+)$/, exp.mystery],
+  [/^search$/, exp.search],
+  [/^profile$/, exp.profile],
   [/^images$/, pub.images],
   [/^image\/([\w-]+)$/, pub.image],
   [/^login$/, auth.login, { open: true }],
@@ -60,27 +76,30 @@ function forbidden() {
   return `<section class="wrap empty"><h1>${h(t('error.devOnly'))}</h1><p>${h(t('error.devOnlyBody'))}</p><a class="btn" href="#">${h(t('nav.home'))}</a></section>`;
 }
 
+const NAV = [
+  ['', 'nav.home'], ['story', 'nav.story'], ['chapters', 'nav.chapters', ['chapter']], ['seasons', 'nav.seasons', ['season', 'event']],
+  ['characters', 'nav.characters', ['character']], ['groups', 'nav.groups', ['group', 'teams', 'team']], ['images', 'nav.images', ['image']],
+  ['timeline', 'nav.timeline'], ['mysteries', 'nav.mysteries', ['mystery']],
+];
+
 function renderNav(path) {
   const top = path.split('/')[0];
-  const link = (href, key, extra = '') => {
-    const active = (href === '' ? top === '' : top === href || top === href.replace(/s$/, ''));
-    return `<a href="#${href}" class="nav-link ${active ? 'active' : ''}" ${extra}>${h(t(key))}</a>`;
-  };
-  $('#nav').innerHTML = `
-    ${link('', 'nav.home')}
-    ${link('characters', 'nav.characters')}
-    ${link('teams', 'nav.teams')}
-    ${link('images', 'nav.images')}
-    ${state.isDev ? `<a href="#dev" class="nav-link nav-dev ${top === 'dev' ? 'active' : ''}">${h(t('nav.dev'))}</a>` : ''}`;
+  const isActive = (href, also = []) => top === href || also.includes(top);
+  $('#nav').innerHTML = NAV.map(([href, key, also]) =>
+    `<a href="#${href}" class="nav-link ${isActive(href, also) ? 'active' : ''}" ${isActive(href, also) ? 'aria-current="page"' : ''}>${h(t(key))}</a>`).join('')
+    + `<a href="#search" class="nav-link nav-only-mobile ${top === 'search' ? 'active' : ''}">${h(t('nav.search'))}</a>`
+    + (state.user ? `<a href="#profile" class="nav-link nav-only-mobile ${top === 'profile' ? 'active' : ''}">${h(t('nav.profile'))}</a>` : '')
+    + (state.isDev ? `<a href="#dev" class="nav-link nav-dev ${top === 'dev' ? 'active' : ''}">${h(t('nav.dev'))}</a>` : '');
+  const icon = (d) => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
   $('#account').innerHTML = `
+    <a class="icon-btn ${top === 'search' ? 'is-on' : ''}" href="#search" aria-label="${h(t('nav.search'))}" title="${h(t('nav.search'))}">${icon('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>')}</a>
     <button class="chip" id="lang-btn" aria-label="${h(t('nav.language'))}">${getLang() === 'ar' ? 'EN' : 'ع'}</button>
     ${state.user
-      ? `<button class="chip" id="signout-btn">${h(t('nav.signOut'))}</button>`
+      ? `<a class="icon-btn ${top === 'profile' ? 'is-on' : ''}" href="#profile" aria-label="${h(t('nav.profile'))}" title="${h(t('nav.profile'))}">${icon('<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>')}</a>`
       : `<a class="chip" href="#login">${h(t('nav.signIn'))}</a>`}`;
   $('#lang-btn').onclick = () => { setLang(getLang() === 'ar' ? 'en' : 'ar'); render(); };
-  const so = $('#signout-btn');
-  if (so) so.onclick = async () => { await sb.auth.signOut(); toast(t('auth.signedOut')); go(''); };
   document.body.classList.toggle('menu-open', false);
+  requestAnimationFrame(() => $('#nav .active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
 }
 
 async function loadUser(session) {

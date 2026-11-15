@@ -9,19 +9,24 @@ import * as api from '../api.js';
 import { state } from '../state.js';
 import { go } from '../app.js';
 import { coverOf, imgAttrs, renderCharacterProfile, renderImageDetail } from './public.js';
+import * as lore from '../api-lore.js';
+import { relationshipEditor } from '../components.js';
+import * as dl from './dev-lore.js';
 
 const TABS = [
-  ['', 'dev.overview'], ['characters', 'dev.characters'], ['teams', 'dev.teams'], ['images', 'dev.images'],
+  ['', 'dev.overview'], ['characters', 'dev.characters'], ['groups', 'dev.groups'], ['seasons', 'dev.seasons'],
+  ['images', 'dev.images'], ['mysteries', 'dev.mysteries'], ['labels', 'dev.labels'],
 ];
 
 let leaveGuard = null;
-window.addEventListener('beforeunload', e => { if (leaveGuard?.()) { e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('beforeunload', e => { if (leaveGuard?.() || dl.leaveGuard()) { e.preventDefault(); e.returnValue = ''; } });
 
 export async function dashboard(main, sub = '', ctx) {
-  leaveGuard = null;
+  leaveGuard = null; dl.resetGuard();
   const [section, id] = (sub || '').split('/');
+  if (section === 'teams') { go('dev/groups'); return; } // Teams were upgraded to Groups
   const tabs = state.isAdmin ? [...TABS, ['access', 'dev.access']] : TABS;
-  const activeTab = { character: 'characters', image: 'images' }[section] ?? section;
+  const activeTab = { character: 'characters', image: 'images', group: 'groups', season: 'seasons', event: 'seasons', mystery: 'mysteries' }[section] ?? section;
   main.innerHTML = `
     <div class="dev">
       <header class="dev-head wrap">
@@ -33,7 +38,11 @@ export async function dashboard(main, sub = '', ctx) {
       <div class="wrap dev-body" id="dev-body"></div>
     </div>`;
   const body = $('#dev-body', main);
-  const views = { '': overview, characters: charList, character: charEditor, teams: teamsManager, images: imageList, image: imageEditor, access };
+  const views = {
+    '': overview, characters: charList, character: charEditor, images: imageList, image: imageEditor, access,
+    groups: dl.groupList, group: dl.groupEditor, seasons: dl.seasonList, season: dl.seasonEditor, event: dl.eventEditor,
+    mysteries: dl.mysteryList, mystery: dl.mysteryEditor, labels: dl.labelsManager,
+  };
   const view = views[section];
   if (!view || (section === 'access' && !state.isAdmin)) { body.innerHTML = `<p>${h(t('error.notFound'))}</p>`; return; }
   await view(body, id, ctx);
@@ -41,7 +50,7 @@ export async function dashboard(main, sub = '', ctx) {
 
 // ─── Overview ──────────────────────────────────────────────────────────
 async function overview(el, _, ctx) {
-  const s = await api.stats();
+  const [s, l] = await Promise.all([api.stats(), lore.loreStats()]);
   if (!ctx.isCurrent()) return;
   const tile = (n, label, sub) => `<div class="stat"><strong>${n}</strong><span>${h(label)}</span>${sub ? `<small>${h(sub)}</small>` : ''}</div>`;
   el.innerHTML = `
@@ -49,12 +58,17 @@ async function overview(el, _, ctx) {
     <div class="stats">
       ${tile(s.chars, t('dev.characters'), t('dev.publishedOf', { n: s.charsPub }))}
       ${tile(s.imgs, t('dev.images'), t('dev.publishedOf', { n: s.imgsPub }))}
-      ${tile(s.teams, t('dev.teams'))}
+      ${tile(l.groups, t('dev.groups'), t('dev.publishedOf', { n: l.groupsPub }))}
+      ${tile(l.seasons, t('dev.seasons'), t('dev.publishedOf', { n: l.seasonsPub }))}
+      ${tile(l.events, t('seasons.events'))}
+      ${tile(l.mysteries, t('dev.mysteries'))}
     </div>
     <div class="quick">
       <a class="btn btn-primary" href="#dev/character/new">＋ ${h(t('dev.newCharacter'))}</a>
-      <a class="btn btn-primary" href="#dev/image/new">＋ ${h(t('dev.newImage'))}</a>
-      <a class="btn" href="#dev/teams">＋ ${h(t('dev.newTeam'))}</a>
+      <a class="btn btn-primary" href="#dev/group/new">＋ ${h(t('dev.newGroup'))}</a>
+      <a class="btn btn-primary" href="#dev/season/new">＋ ${h(t('dev.newSeason'))}</a>
+      <a class="btn" href="#dev/image/new">＋ ${h(t('dev.newImage'))}</a>
+      <a class="btn" href="#dev/mystery/new">＋ ${h(t('dev.newMystery'))}</a>
     </div>
     <p class="muted small">${h(t('dev.roleNote', { roles: state.roles.map(r => t('role.' + r)).join(', ') }))}</p>`;
 }
@@ -86,7 +100,6 @@ async function charList(el, _, ctx) {
         <div class="admin-main">
           <a href="#dev/character/${h(c.id)}" class="admin-title" dir="auto">${h(c.name)}</a>
           <div class="row-wrap small">${statusBadge(c.status)}
-            <span class="muted" dir="auto">${h(c.team?.name || t('characters.noTeam'))}</span>
             <span class="badge ${c.is_published ? 'badge-pub' : 'badge-draft'}">${h(t(c.is_published ? 'common.published' : 'common.draft'))}</span>
             <span class="muted">${h(fmtDate(c.updated_at))}</span></div>
         </div>
@@ -121,7 +134,10 @@ async function charList(el, _, ctx) {
 // ─── Characters: editor ────────────────────────────────────────────────
 async function charEditor(el, id, ctx) {
   const isNew = !id || id === 'new';
-  const [c, teams] = await Promise.all([isNew ? null : api.getCharacter(id), api.listTeams()]);
+  const [c, groups, types, rels] = await Promise.all([
+    isNew ? null : api.getCharacter(id), lore.listGroups({ publishedOnly: false }), lore.listRelTypes(),
+    isNew ? [] : lore.characterGroups(id),
+  ]);
   if (!ctx.isCurrent()) return;
   if (!isNew && !c) { el.innerHTML = `<p>${h(t('error.notFound'))}</p>`; return; }
   const model = c ? structuredClone(c) : { name: '', story: '', status: 'unknown', team_id: null, is_published: false, images: [] };
@@ -146,16 +162,12 @@ async function charEditor(el, id, ctx) {
           <div class="seg">${['alive', 'dead', 'unknown'].map(s => `
             <label><input type="radio" name="status" value="${s}" ${model.status === s ? 'checked' : ''}><span>${h(t('status.' + s))}</span></label>`).join('')}</div>
         </fieldset>
-        <div class="field">
-          <label for="team-sel"><span>${h(t('characters.team'))}</span></label>
-          <div class="row-wrap nowrap">
-            <select id="team-sel" name="team_id">
-              <option value="">${h(t('characters.noTeam'))}</option>
-              ${teams.map(tm => `<option value="${h(tm.id)}" ${model.team_id === tm.id ? 'selected' : ''}>${h(tm.name)}</option>`).join('')}
-            </select>
-            <button type="button" class="btn btn-small" id="new-team">＋ ${h(t('dev.newTeam'))}</button>
-          </div>
-        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="kicker">${h(t('nav.groups'))}</h2>
+        <p class="muted small">${h(t('groups.charHelp'))} <a href="#dev/group/new">＋ ${h(t('dev.newGroup'))}</a></p>
+        <div id="char-groups"></div>
       </section>
 
       <section class="panel">
@@ -237,18 +249,17 @@ async function charEditor(el, id, ctx) {
   };
   drawItems();
 
-  $('#new-team', el).onclick = async () => {
-    const tm = await teamDialog();
-    if (!tm) return;
-    const sel = $('#team-sel', el);
-    sel.insertAdjacentHTML('beforeend', `<option value="${h(tm.id)}">${h(tm.name)}</option>`);
-    sel.value = tm.id; teams.push(tm); dirty = true;
-  };
+  // Groups / factions: many-to-many with configurable relationship labels.
+  const relEd = relationshipEditor($('#char-groups', el), {
+    side: 'character', types, rows: rels,
+    targets: groups.map(g => ({ id: g.id, label: g.name + (g.is_published ? '' : ` (${t('common.draft')})`) })),
+  });
 
   const collect = () => {
     snapshotStories(); drawItems();
     return {
-      id: model.id, name: form.name.value, status: form.status.value, team_id: form.team_id.value || null,
+      // team_id is deprecated (kept untouched for data preservation)
+      id: model.id, name: form.name.value, status: form.status.value, team_id: model.team_id || null,
       story: story.getHtml(),
     };
   };
@@ -271,6 +282,7 @@ async function charEditor(el, id, ctx) {
         if (it.file) { it.storage_path = await uploadImage(it.file, `characters/${row.id}`); uploaded.push(it.storage_path); }
       }
       await api.syncCharacterImages(row.id, imgs, original);
+      await lore.syncRelationships({ characterId: row.id }, relEd.value());
       // 3) publish state
       if (target !== row.is_published) await api.setCharacterPublished(row.id, target);
       dirty = false;
@@ -290,10 +302,10 @@ async function charEditor(el, id, ctx) {
     if (a === 'toggle') return save(!model.is_published);
     if (a === 'preview') {
       const data = collect();
-      const team = teams.find(tm => tm.id === data.team_id) || null;
       const box = document.createElement('div');
+      const groupRows = relEd.value().map(r => ({ note: r.note, type: types.find(ty => ty.id === r.relationship_type_id), group: groups.find(g => g.id === r.group_id) })).filter(r => r.group);
       renderCharacterProfile(box, {
-        ...data, is_published: false, team, updated_at: new Date().toISOString(),
+        ...data, is_published: false, groups: groupRows, updated_at: new Date().toISOString(),
         images: collectImages().map(it => ({ ...it, _editor: undefined })),
       }, { preview: true });
       return modal({ title: t('dev.preview'), body: box, wide: true, className: 'modal-full' });
@@ -303,92 +315,6 @@ async function charEditor(el, id, ctx) {
       catch (err) { toast(errMsg(err), 'error'); }
     }
   };
-}
-
-// ─── Teams ─────────────────────────────────────────────────────────────
-async function teamDialog(team = null) {
-  const form = document.createElement('form');
-  form.className = 'stack';
-  form.innerHTML = `
-    <label class="field"><span>${h(t('teams.name'))} <em class="req">*</em></span><input name="name" maxlength="120" required value="${h(team?.name || '')}" dir="auto"></label>
-    <label class="field"><span>${h(t('teams.description'))}</span><textarea name="description" rows="6" dir="auto">${h(team?.description || '')}</textarea></label>
-    <p class="form-error" role="alert" hidden></p>`;
-  const back = modal({ title: t(team ? 'dev.editTeam' : 'dev.newTeam'), body: form, actions: [] });
-  const foot = document.createElement('footer');
-  foot.className = 'modal-foot';
-  foot.innerHTML = `<button type="button" class="btn" data-c>${h(t('common.cancel'))}</button><button class="btn btn-primary" type="submit">${h(t('common.save'))}</button>`;
-  form.appendChild(foot);
-  setTimeout(() => form.name.focus(), 50);
-  return new Promise(resolve => {
-    const closeWith = v => { form.closest('.modal-back')?._close(null); resolve(v); };
-    back.then(() => resolve(null));
-    foot.querySelector('[data-c]').onclick = () => closeWith(null);
-    form.onsubmit = async e => {
-      e.preventDefault();
-      const err = $('.form-error', form);
-      if (!form.name.value.trim()) { err.textContent = t('dev.nameRequired'); err.hidden = false; return; }
-      try { closeWith(await api.saveTeam({ id: team?.id, name: form.name.value, description: form.description.value })); toast(t('dev.saved')); }
-      catch (ex) { err.textContent = errMsg(ex); err.hidden = false; }
-    };
-  });
-}
-
-async function teamsManager(el, _, ctx) {
-  const [teams, chars] = await Promise.all([api.listTeams(), api.listCharacters({ publishedOnly: false })]);
-  if (!ctx.isCurrent()) return;
-  el.innerHTML = `
-    <div class="toolbar"><h1 class="display">${h(t('dev.teams'))}</h1>
-      <button class="btn btn-primary" id="add-team">＋ ${h(t('dev.newTeam'))}</button></div>
-    ${teams.length ? `<ul class="admin-list">${teams.map(tm => {
-      const members = chars.filter(c => c.team_id === tm.id);
-      return `<li class="admin-row team-admin" data-id="${h(tm.id)}">
-        <div class="admin-main">
-          <span class="admin-title" dir="auto">${h(tm.name)}</span>
-          <p class="muted small" dir="auto">${h(excerpt(textToHtml(tm.description), 140) || t('teams.noDescription'))}</p>
-          <p class="small">${h(t('teams.count', { n: members.length }))}${members.length ? ': ' : ''}<span class="muted" dir="auto">${h(members.slice(0, 6).map(m => m.name).join(', '))}${members.length > 6 ? '…' : ''}</span></p>
-        </div>
-        <div class="admin-actions">
-          <button class="btn btn-small" data-act="edit">${h(t('common.edit'))}</button>
-          <button class="btn btn-small" data-act="members">${h(t('teams.manageMembers'))}</button>
-          <a class="btn btn-small btn-ghost" href="#team/${h(tm.id)}">${h(t('common.view'))}</a>
-          <button class="btn btn-small btn-ghost btn-danger-text" data-act="del">${h(t('common.delete'))}</button>
-        </div></li>`;
-    }).join('')}</ul>` : `<div class="empty"><p class="muted">${h(t('teams.empty'))}</p></div>`}`;
-  const reload = () => teamsManager(el, _, ctx);
-  $('#add-team', el).onclick = async () => { if (await teamDialog()) reload(); };
-  $$('[data-act]', el).forEach(b => b.onclick = async () => {
-    const tm = teams.find(x => x.id === b.closest('[data-id]').dataset.id);
-    try {
-      if (b.dataset.act === 'edit') { if (await teamDialog(tm)) reload(); }
-      else if (b.dataset.act === 'members') { if (await membersDialog(tm, chars)) reload(); }
-      else if (await confirmDialog(t('dev.confirmDeleteTeam', { name: tm.name }))) { await api.deleteTeam(tm.id); toast(t('dev.deleted')); reload(); }
-    } catch (e) { toast(errMsg(e), 'error'); }
-  });
-}
-
-async function membersDialog(team, chars) {
-  const prev = chars.filter(c => c.team_id === team.id).map(c => c.id);
-  const box = document.createElement('div');
-  box.className = 'stack';
-  box.innerHTML = `
-    <p class="muted small">${h(t('teams.membersHelp'))}</p>
-    <input type="search" placeholder="${h(t('common.search'))}" class="m-search" dir="auto">
-    <ul class="check-list">${chars.map(c => `
-      <li data-name="${h(c.name.toLowerCase())}"><label>
-        <input type="checkbox" value="${h(c.id)}" ${c.team_id === team.id ? 'checked' : ''}>
-        <span dir="auto">${h(c.name)}</span>
-        ${c.team && c.team_id !== team.id ? `<small class="muted" dir="auto">(${h(c.team.name)})</small>` : ''}
-      </label></li>`).join('')}</ul>`;
-  $('.m-search', box).oninput = e => {
-    const q = e.target.value.toLowerCase();
-    $$('li', box).forEach(li => li.hidden = !li.dataset.name.includes(q));
-  };
-  const r = await modal({ title: t('teams.membersOf', { name: team.name }), body: box, actions: [{ label: t('common.cancel'), value: null }, { label: t('common.save'), value: 'ok', kind: 'primary' }] });
-  if (r !== 'ok') return false;
-  const ids = $$('input[type=checkbox]:checked', box).map(i => i.value);
-  await api.setTeamMembers(team.id, ids, prev);
-  toast(t('dev.saved'));
-  return true;
 }
 
 // ─── Image archive: list ───────────────────────────────────────────────
@@ -438,12 +364,12 @@ async function imageList(el, _, ctx) {
 // ─── Image archive: editor ─────────────────────────────────────────────
 async function imageEditor(el, id, ctx) {
   const isNew = !id || id === 'new';
-  const [rec, chars, facets] = await Promise.all([
-    isNew ? null : api.getArchive(id), api.listCharacters({ publishedOnly: false }), api.archiveFacets(),
+  const [rec, chars, facets, seasons] = await Promise.all([
+    isNew ? null : api.getArchive(id), api.listCharacters({ publishedOnly: false }), api.archiveFacets(), lore.listSeasons({ publishedOnly: false }),
   ]);
   if (!ctx.isCurrent()) return;
   if (!isNew && !rec) { el.innerHTML = `<p>${h(t('error.notFound'))}</p>`; return; }
-  const model = rec ? { ...rec } : { image_name: '', story: '', chapter: '', event_name: '', character_id: null, is_published: false };
+  const model = rec ? { ...rec } : { image_name: '', story: '', chapter: '', event_name: '', character_id: null, season_id: null, is_published: false };
   let file = null; let dirty = false;
   leaveGuard = () => dirty;
 
@@ -479,6 +405,10 @@ async function imageEditor(el, id, ctx) {
           <select name="character_id"><option value="">${h(t('images.noCharacter'))}</option>
             ${chars.map(c => `<option value="${h(c.id)}" ${model.character_id === c.id ? 'selected' : ''}>${h(c.name)}${c.is_published ? '' : ' (' + h(t('common.draft')) + ')'}</option>`).join('')}
           </select></label>
+        <label class="field"><span>${h(t('images.season'))}</span>
+          <select name="season_id"><option value="">${h(t('images.noCharacter'))}</option>
+            ${seasons.map(x => `<option value="${h(x.id)}" ${model.season_id === x.id ? 'selected' : ''}>${h(x.name)}</option>`).join('')}
+          </select></label>
       </section>
       <section class="panel">
         <h2 class="kicker">${h(t('images.story'))}</h2>
@@ -510,7 +440,7 @@ async function imageEditor(el, id, ctx) {
 
   const collect = () => ({
     id: model.id, image_name: form.image_name.value, chapter: form.chapter.value, event_name: form.event_name.value,
-    character_id: form.character_id.value || null, story: story.getHtml(), storage_path: model.storage_path,
+    character_id: form.character_id.value || null, season_id: form.season_id.value || null, story: story.getHtml(), storage_path: model.storage_path,
   });
   const setBusy = b => $$('.action-bar button', el).forEach(x => x.disabled = b);
 
@@ -546,6 +476,7 @@ async function imageEditor(el, id, ctx) {
         ...d, is_published: false, uploaded_at: model.uploaded_at,
         _url: file ? URL.createObjectURL(file) : null,
         character: chars.find(c => c.id === d.character_id) || null,
+        season: seasons.find(x => x.id === d.season_id) || null,
       }, { preview: true });
       return modal({ title: t('dev.preview'), body: box, wide: true, className: 'modal-full' });
     }

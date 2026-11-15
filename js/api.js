@@ -124,12 +124,12 @@ export async function listArchive({ publishedOnly = true, chapter, characterId, 
   return ok(await q);
 }
 export async function getArchive(id) {
-  return ok(await sb.from('image_archive').select('*,character:characters(id,name)').eq('id', id).maybeSingle());
+  return ok(await sb.from('image_archive').select('*,character:characters(id,name),season:seasons(id,name),events:event_images(event:season_events(id,title))').eq('id', id).maybeSingle());
 }
 export async function saveArchive(row) {
   const data = {
     storage_path: row.storage_path, image_name: row.image_name.trim(), story: row.story || '',
-    character_id: row.character_id || null,
+    character_id: row.character_id || null, season_id: row.season_id || null,
     event_name: row.event_name?.trim() || null, chapter: row.chapter?.trim() || null,
     is_published: !!row.is_published,
   };

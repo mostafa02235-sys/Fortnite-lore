@@ -163,6 +163,117 @@ const ar = {
   'error.devOnly': 'للمطوّرين فقط', 'error.devOnlyBody': 'هذا القسم مخصص لمطوّري الأرشيف الموثّقين.',
 };
 
+
+// ─── Groups, Seasons, Timeline, Mysteries, Search, Profile ───────────
+Object.assign(en, {
+  'nav.story': 'Story Archive', 'nav.chapters': 'Chapters', 'nav.seasons': 'Seasons', 'nav.groups': 'Groups & Factions',
+  'nav.timeline': 'Timeline', 'nav.mysteries': 'Mysteries', 'nav.search': 'Search', 'nav.profile': 'Profile',
+  'common.optional': 'optional', 'home.readStory': 'Read the story',
+  'characters.anyGroup': 'Any group', 'characters.noGroup': 'No group', 'characters.groups': 'Groups & factions',
+  'characters.appearances': 'Appearances',
+
+  'groups.title': 'Groups & Factions', 'groups.lead': 'The organisations, alliances and factions that shaped the Island.',
+  'groups.empty': 'No groups yet.', 'groups.name': 'Group name', 'groups.status': 'Group status', 'groups.statusPh': 'e.g. Active, Disbanded',
+  'groups.st.active': 'Active', 'groups.st.disbanded': 'Disbanded', 'groups.st.destroyed': 'Destroyed', 'groups.st.unknown': 'Unknown',
+  'groups.logo': 'Logo or main image', 'groups.description': 'Description', 'groups.story': 'Full story', 'groups.history': 'Background & history',
+  'groups.goals': 'Goals & objectives', 'groups.members': 'Members', 'groups.memberCount': '{n} members', 'groups.noMembers': 'No published members yet.',
+  'groups.membersHelp': 'Add characters and choose their relationship. A character can appear more than once with different labels (e.g. Former Member and Enemy).',
+  'groups.charHelp': 'A character can belong to several groups, each with its own relationship label.',
+  'groups.relationship': 'Relationship', 'groups.addMember': 'Add character', 'groups.addToGroup': 'Add to a group',
+  'groups.relatedSeasons': 'Related seasons', 'groups.relatedEvents': 'Related events', 'groups.images': 'Additional images',
+  'groups.seasonNotePh': 'Their role in this season', 'groups.needText': 'Write a description or story before publishing.', 'groups.unlabelled': 'Other',
+
+  'seasons.title': 'Seasons Encyclopedia', 'seasons.lead': 'Every season of the story, chapter by chapter.', 'seasons.empty': 'No seasons yet.',
+  'seasons.name': 'Season name', 'seasons.namePh': 'e.g. Zero Point', 'seasons.chapter': 'Chapter', 'seasons.season': 'Season',
+  'seasons.chapterN': 'Chapter {n}', 'seasons.seasonN': 'Season {n}', 'seasons.chapterNumber': 'Chapter number', 'seasons.seasonNumber': 'Season number',
+  'seasons.release': 'Release date', 'seasons.end': 'End date', 'seasons.cover': 'Cover image', 'seasons.summary': 'Season summary',
+  'seasons.story': 'Full season story', 'seasons.discoveries': 'Important discoveries', 'seasons.missions': 'Story missions',
+  'seasons.characters': 'Important characters', 'seasons.groups': 'Groups involved', 'seasons.images': 'Images', 'seasons.references': 'References & sources',
+  'seasons.timeline': 'Timeline', 'seasons.events': 'Events', 'seasons.eventN': 'Event {n}', 'seasons.contents': 'Contents',
+  'seasons.otherSeasons': 'Other seasons', 'seasons.openChapter': 'Open chapter', 'seasons.fromArchive': 'From the image archive',
+  'seasons.timelineHelp': 'Drag events or use ↑ ↓ to set the order. The order is saved immediately; events are never recreated.',
+  'seasons.saveFirst': 'Save the season first, then add timeline events.', 'seasons.addEvent': 'Add event', 'seasons.noEvents': 'No events yet.',
+  'seasons.orderSaved': 'Timeline order saved.', 'seasons.moveUp': 'Move up', 'seasons.moveDown': 'Move down',
+  'seasons.eventName': 'Event name', 'seasons.eventDate': 'Date', 'seasons.eventImage': 'Event image', 'seasons.explanation': 'Full explanation',
+  'seasons.relatedImages': 'Related images (from the image archive)', 'seasons.noEventBody': 'No explanation has been written yet.',
+  'seasons.charNotePh': 'Their role in this season', 'seasons.groupNotePh': 'Their role in this season',
+  'seasons.refTitle': 'Title', 'seasons.addRef': 'Add reference', 'seasons.noRefs': 'No references yet.',
+  'seasons.badDates': 'The end date must be after the release date.', 'seasons.needText': 'Write a summary or story before publishing.',
+  'chapters.title': 'Chapters', 'chapters.lead': 'The saga in its largest arcs.', 'chapters.seasonCount': '{n} seasons',
+  'story.title': 'Story Archive', 'story.lead': 'Read the whole saga in order, season by season.', 'story.readFull': 'Read the full season',
+  'timeline.title': 'Timeline', 'timeline.lead': 'Every recorded event across every season, in order.', 'timeline.empty': 'No events yet.',
+
+  'mysteries.title': 'Mysteries', 'mysteries.lead': 'Unanswered questions, theories and the clues behind them.', 'mysteries.empty': 'No mysteries yet.',
+  'mysteries.name': 'Mystery', 'mysteries.status': 'Status', 'mysteries.any': 'Any status', 'mysteries.body': 'The mystery',
+  'mysteries.open': 'Unsolved', 'mysteries.partial': 'Partly answered', 'mysteries.solved': 'Solved',
+
+  'search.title': 'Search the archive', 'search.placeholder': 'Characters, groups, seasons, events, images…', 'search.hint': 'Type at least 2 characters.',
+  'search.none': 'Nothing matches “{q}”.',
+  'profile.title': 'Your profile', 'profile.role': 'Access', 'profile.member': 'Member', 'profile.since': 'Member since', 'profile.changePassword': 'Change password',
+
+  'dev.groups': 'Groups', 'dev.seasons': 'Seasons', 'dev.mysteries': 'Mysteries', 'dev.labels': 'Relationship labels',
+  'dev.newGroup': 'New group', 'dev.newSeason': 'New season', 'dev.newMystery': 'New mystery',
+  'dev.searchToAdd': 'Search to add…', 'dev.noMatches': 'No matches', 'dev.noneLinked': 'Nothing linked yet.', 'dev.notePh': 'Note (optional)',
+  'dev.nothingYet': 'Nothing here yet.', 'dev.confirmDeleteGeneric': 'Delete “{name}”? This cannot be undone.',
+  'labels.help': 'These labels describe how a character relates to a group. Add as many as the lore needs; both languages are shown on the site.',
+  'labels.add': 'Add label', 'labels.inUse': 'This label is used by relationships. Change those first.',
+  'images.season': 'Related season',
+});
+Object.assign(ar, {
+  'nav.story': 'أرشيف القصة', 'nav.chapters': 'الفصول', 'nav.seasons': 'المواسم', 'nav.groups': 'المجموعات والفصائل',
+  'nav.timeline': 'الخط الزمني', 'nav.mysteries': 'الألغاز', 'nav.search': 'بحث', 'nav.profile': 'الملف الشخصي',
+  'common.optional': 'اختياري', 'home.readStory': 'اقرأ القصة',
+  'characters.anyGroup': 'كل المجموعات', 'characters.noGroup': 'بلا مجموعة', 'characters.groups': 'المجموعات والفصائل',
+  'characters.appearances': 'الظهور',
+
+  'groups.title': 'المجموعات والفصائل', 'groups.lead': 'المنظمات والتحالفات والفصائل التي شكّلت الجزيرة.',
+  'groups.empty': 'لا توجد مجموعات بعد.', 'groups.name': 'اسم المجموعة', 'groups.status': 'حالة المجموعة', 'groups.statusPh': 'مثال: نشطة، منحلّة',
+  'groups.st.active': 'نشطة', 'groups.st.disbanded': 'منحلّة', 'groups.st.destroyed': 'مدمّرة', 'groups.st.unknown': 'مجهولة',
+  'groups.logo': 'الشعار أو الصورة الرئيسية', 'groups.description': 'الوصف', 'groups.story': 'القصة الكاملة', 'groups.history': 'الخلفية والتاريخ',
+  'groups.goals': 'الأهداف والغايات', 'groups.members': 'الأعضاء', 'groups.memberCount': '{n} عضو', 'groups.noMembers': 'لا يوجد أعضاء منشورون بعد.',
+  'groups.membersHelp': 'أضف الشخصيات واختر علاقتها. يمكن أن تظهر الشخصية أكثر من مرة بعلاقات مختلفة (مثل عضو سابق وعدو).',
+  'groups.charHelp': 'يمكن للشخصية أن تنتمي لعدة مجموعات، ولكل منها نوع علاقة خاص.',
+  'groups.relationship': 'العلاقة', 'groups.addMember': 'إضافة شخصية', 'groups.addToGroup': 'إضافة إلى مجموعة',
+  'groups.relatedSeasons': 'المواسم المرتبطة', 'groups.relatedEvents': 'الأحداث المرتبطة', 'groups.images': 'صور إضافية',
+  'groups.seasonNotePh': 'دورها في هذا الموسم', 'groups.needText': 'اكتب وصفًا أو قصة قبل النشر.', 'groups.unlabelled': 'أخرى',
+
+  'seasons.title': 'موسوعة المواسم', 'seasons.lead': 'كل مواسم القصة، فصلًا بعد فصل.', 'seasons.empty': 'لا توجد مواسم بعد.',
+  'seasons.name': 'اسم الموسم', 'seasons.namePh': 'مثال: النقطة الصفرية', 'seasons.chapter': 'الفصل', 'seasons.season': 'الموسم',
+  'seasons.chapterN': 'الفصل {n}', 'seasons.seasonN': 'الموسم {n}', 'seasons.chapterNumber': 'رقم الفصل', 'seasons.seasonNumber': 'رقم الموسم',
+  'seasons.release': 'تاريخ الإصدار', 'seasons.end': 'تاريخ الانتهاء', 'seasons.cover': 'صورة الغلاف', 'seasons.summary': 'ملخص الموسم',
+  'seasons.story': 'القصة الكاملة للموسم', 'seasons.discoveries': 'اكتشافات مهمة', 'seasons.missions': 'مهام القصة',
+  'seasons.characters': 'شخصيات مهمة', 'seasons.groups': 'المجموعات المشاركة', 'seasons.images': 'الصور', 'seasons.references': 'المراجع والمصادر',
+  'seasons.timeline': 'الخط الزمني', 'seasons.events': 'الأحداث', 'seasons.eventN': 'الحدث {n}', 'seasons.contents': 'المحتويات',
+  'seasons.otherSeasons': 'مواسم أخرى', 'seasons.openChapter': 'افتح الفصل', 'seasons.fromArchive': 'من أرشيف الصور',
+  'seasons.timelineHelp': 'اسحب الأحداث أو استخدم ↑ ↓ لترتيبها. يُحفظ الترتيب فورًا دون إعادة إنشاء الأحداث.',
+  'seasons.saveFirst': 'احفظ الموسم أولًا ثم أضف أحداث الخط الزمني.', 'seasons.addEvent': 'إضافة حدث', 'seasons.noEvents': 'لا توجد أحداث بعد.',
+  'seasons.orderSaved': 'تم حفظ ترتيب الخط الزمني.', 'seasons.moveUp': 'تحريك لأعلى', 'seasons.moveDown': 'تحريك لأسفل',
+  'seasons.eventName': 'اسم الحدث', 'seasons.eventDate': 'التاريخ', 'seasons.eventImage': 'صورة الحدث', 'seasons.explanation': 'الشرح الكامل',
+  'seasons.relatedImages': 'صور مرتبطة (من أرشيف الصور)', 'seasons.noEventBody': 'لم يُكتب شرح بعد.',
+  'seasons.charNotePh': 'دورها في هذا الموسم', 'seasons.groupNotePh': 'دورها في هذا الموسم',
+  'seasons.refTitle': 'العنوان', 'seasons.addRef': 'إضافة مرجع', 'seasons.noRefs': 'لا توجد مراجع بعد.',
+  'seasons.badDates': 'يجب أن يكون تاريخ الانتهاء بعد تاريخ الإصدار.', 'seasons.needText': 'اكتب ملخصًا أو قصة قبل النشر.',
+  'chapters.title': 'الفصول', 'chapters.lead': 'الملحمة في أكبر أقسامها.', 'chapters.seasonCount': '{n} مواسم',
+  'story.title': 'أرشيف القصة', 'story.lead': 'اقرأ الملحمة كاملة بالترتيب، موسمًا بعد موسم.', 'story.readFull': 'اقرأ الموسم كاملًا',
+  'timeline.title': 'الخط الزمني', 'timeline.lead': 'كل حدث مسجّل في كل موسم، بالترتيب.', 'timeline.empty': 'لا توجد أحداث بعد.',
+
+  'mysteries.title': 'الألغاز', 'mysteries.lead': 'أسئلة بلا إجابة، ونظريات، والأدلة وراءها.', 'mysteries.empty': 'لا توجد ألغاز بعد.',
+  'mysteries.name': 'اللغز', 'mysteries.status': 'الحالة', 'mysteries.any': 'كل الحالات', 'mysteries.body': 'اللغز',
+  'mysteries.open': 'لم يُحل', 'mysteries.partial': 'حُلّ جزئيًا', 'mysteries.solved': 'حُلّ',
+
+  'search.title': 'ابحث في الأرشيف', 'search.placeholder': 'شخصيات، مجموعات، مواسم، أحداث، صور…', 'search.hint': 'اكتب حرفين على الأقل.',
+  'search.none': 'لا نتائج لـ «{q}».',
+  'profile.title': 'ملفك الشخصي', 'profile.role': 'الصلاحية', 'profile.member': 'عضو', 'profile.since': 'عضو منذ', 'profile.changePassword': 'تغيير كلمة المرور',
+
+  'dev.groups': 'المجموعات', 'dev.seasons': 'المواسم', 'dev.mysteries': 'الألغاز', 'dev.labels': 'أنواع العلاقات',
+  'dev.newGroup': 'مجموعة جديدة', 'dev.newSeason': 'موسم جديد', 'dev.newMystery': 'لغز جديد',
+  'dev.searchToAdd': 'ابحث للإضافة…', 'dev.noMatches': 'لا نتائج', 'dev.noneLinked': 'لا يوجد ربط بعد.', 'dev.notePh': 'ملاحظة (اختياري)',
+  'dev.nothingYet': 'لا يوجد شيء بعد.', 'dev.confirmDeleteGeneric': 'حذف «{name}»؟ لا يمكن التراجع.',
+  'labels.help': 'تصف هذه الأنواع علاقة الشخصية بالمجموعة. أضف ما تحتاجه القصة؛ تظهر اللغتان على الموقع.',
+  'labels.add': 'إضافة نوع', 'labels.inUse': 'هذا النوع مستخدم في علاقات. غيّرها أولًا.',
+  'images.season': 'الموسم المرتبط',
+});
+
 const dicts = { en, ar };
 let lang = 'en';
 try {
