@@ -1,0 +1,6 @@
+{
+  "appId": "com.nhgg.fortnitelore",
+  "appName": "Fortnite Lore",
+  "webDir": "www",
+  "android": { "backgroundColor": "#0a0b0e" }
+}
