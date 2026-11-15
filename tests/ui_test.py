@@ -38,10 +38,14 @@ with sync_playwright() as p:
     pg.wait_for_selector('.stats')
     check('correct code unlocks Developer Mode (time-limited session)', pg.locator('.nav-dev').count() == 1 and pg.locator('.dev-mode').count() == 1
           and pg.evaluate("(new Date(__mock.db.lore_dev_sessions[0].expires_at) - Date.now()) / 3600e3") > 7.9)
-    secret = 'M82KJ91' + 'LO'
-    leaks = [os.path.join(r, f) for r, _, fs in os.walk(APP) if '.git' not in r for f in fs if f.endswith(('.js', '.html', '.css', '.json', '.md', '.sql', '.yml')) and secret in open(os.path.join(r, f), encoding='utf-8', errors='ignore').read()]
-    check('real access code appears in no file of the site or repo', not leaks)
-    check('real access code not in served page or scripts', secret not in pg.content() and not pg.evaluate(f"[...document.scripts].some(s => s.textContent.includes('{secret}'))"))
+    # Leak check: pass the real code via an environment variable (never write it in this file).
+    secret = os.environ.get('LORE_DEV_CODE', '')
+    if secret:
+        leaks = [os.path.join(r, f) for r, _, fs in os.walk(APP) if '.git' not in r for f in fs if secret in open(os.path.join(r, f), encoding='utf-8', errors='ignore').read()]
+        check('real access code appears in no file of the site or repo', not leaks)
+        check('real access code not in served page or scripts', secret not in pg.content())
+    else:
+        print('SKIP leak check (set LORE_DEV_CODE to run it)')
 
     # Groups (quick create so characters can be linked)
     for name, desc in [('The Seven', 'Guardians of the Zero Point.'), ('IO', 'The Imagined Order.')]:
