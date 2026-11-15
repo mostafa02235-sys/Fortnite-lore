@@ -12,10 +12,15 @@ import { coverOf, imgAttrs, renderCharacterProfile, renderImageDetail } from './
 import * as lore from '../api-lore.js';
 import { relationshipEditor } from '../components.js';
 import * as dl from './dev-lore.js';
+import * as hub from './dev-hub.js';
+import { icon } from '../icons.js';
+import { exitDevMode, devTimeLeft } from '../devmode.js';
 
 const TABS = [
-  ['', 'dev.overview'], ['characters', 'dev.characters'], ['groups', 'dev.groups'], ['seasons', 'dev.seasons'],
-  ['images', 'dev.images'], ['mysteries', 'dev.mysteries'], ['labels', 'dev.labels'],
+  ['', 'dev.overview', 'grid'], ['characters', 'dev.characters', 'user'], ['groups', 'dev.groups', 'shield'],
+  ['seasons', 'dev.seasons', 'calendar'], ['timeline', 'dev.timeline', 'clock'], ['stories', 'dev.stories', 'feather'],
+  ['images', 'dev.images', 'image'], ['mysteries', 'dev.mysteries', 'help'], ['publishing', 'dev.publishing', 'send'],
+  ['labels', 'dev.labels', 'tag'],
 ];
 
 let leaveGuard = null;
@@ -25,52 +30,40 @@ export async function dashboard(main, sub = '', ctx) {
   leaveGuard = null; dl.resetGuard();
   const [section, id] = (sub || '').split('/');
   if (section === 'teams') { go('dev/groups'); return; } // Teams were upgraded to Groups
-  const tabs = state.isAdmin ? [...TABS, ['access', 'dev.access']] : TABS;
-  const activeTab = { character: 'characters', image: 'images', group: 'groups', season: 'seasons', event: 'seasons', mystery: 'mysteries' }[section] ?? section;
+  const tabs = state.isAdmin ? [...TABS, ['access', 'dev.access', 'key']] : TABS;
+  const activeTab = { character: 'characters', image: 'images', group: 'groups', season: 'seasons', event: 'timeline', mystery: 'mysteries' }[section] ?? section;
   main.innerHTML = `
     <div class="dev">
-      <header class="dev-head wrap">
-        <p class="eyebrow">${h(t('dev.eyebrow'))}</p>
-        <nav class="tabs" aria-label="${h(t('nav.dev'))}">
-          ${tabs.map(([k, label]) => `<a href="#dev${k ? '/' + k : ''}" class="tab ${activeTab === k ? 'active' : ''}">${h(t(label))}</a>`).join('')}
+      <header class="dev-head">
+        <div class="wrap dev-head-row">
+          <p class="eyebrow">${icon('grid', 14)} ${h(t('dev.eyebrow'))}</p>
+          <div class="dev-mode">
+            <span class="dev-mode-dot" aria-hidden="true"></span>
+            <span><span class="hide-sm">${h(t('devmode.active'))} · </span><span class="muted">${h(devTimeLeft())}</span></span>
+            <button class="btn btn-small btn-ghost" id="dev-exit" aria-label="${h(t('devmode.exit'))}">${icon('logout', 15)} <span class="hide-sm">${h(t('devmode.exit'))}</span><span class="show-sm">${h(t('devmode.exitShort'))}</span></button>
+          </div>
+        </div>
+        <nav class="wrap tabs" aria-label="${h(t('nav.dev'))}">
+          ${tabs.map(([k, label, ic]) => `<a href="#dev${k ? '/' + k : ''}" class="tab ${activeTab === k ? 'active' : ''}" ${activeTab === k ? 'aria-current="page"' : ''}>${icon(ic, 16)}<span>${h(t(label))}</span></a>`).join('')}
         </nav>
       </header>
       <div class="wrap dev-body" id="dev-body"></div>
     </div>`;
+  $('#dev-exit', main).onclick = async () => {
+    if ((leaveGuard?.() || dl.leaveGuard()) && !await confirmDialog(t('dev.leaveUnsaved'), { ok: t('devmode.exit') })) return;
+    if (await exitDevMode()) { leaveGuard = null; dl.resetGuard(); go(''); }
+  };
+  requestAnimationFrame(() => main.querySelector('.tab.active')?.scrollIntoView({ block: 'nearest', inline: 'center' }));
   const body = $('#dev-body', main);
   const views = {
-    '': overview, characters: charList, character: charEditor, images: imageList, image: imageEditor, access,
+    '': hub.overview, characters: charList, character: charEditor, images: imageList, image: imageEditor, access,
     groups: dl.groupList, group: dl.groupEditor, seasons: dl.seasonList, season: dl.seasonEditor, event: dl.eventEditor,
     mysteries: dl.mysteryList, mystery: dl.mysteryEditor, labels: dl.labelsManager,
+    stories: hub.stories, publishing: hub.publishing, timeline: hub.timeline,
   };
   const view = views[section];
   if (!view || (section === 'access' && !state.isAdmin)) { body.innerHTML = `<p>${h(t('error.notFound'))}</p>`; return; }
   await view(body, id, ctx);
-}
-
-// ─── Overview ──────────────────────────────────────────────────────────
-async function overview(el, _, ctx) {
-  const [s, l] = await Promise.all([api.stats(), lore.loreStats()]);
-  if (!ctx.isCurrent()) return;
-  const tile = (n, label, sub) => `<div class="stat"><strong>${n}</strong><span>${h(label)}</span>${sub ? `<small>${h(sub)}</small>` : ''}</div>`;
-  el.innerHTML = `
-    <h1 class="display">${h(t('dev.title'))}</h1>
-    <div class="stats">
-      ${tile(s.chars, t('dev.characters'), t('dev.publishedOf', { n: s.charsPub }))}
-      ${tile(s.imgs, t('dev.images'), t('dev.publishedOf', { n: s.imgsPub }))}
-      ${tile(l.groups, t('dev.groups'), t('dev.publishedOf', { n: l.groupsPub }))}
-      ${tile(l.seasons, t('dev.seasons'), t('dev.publishedOf', { n: l.seasonsPub }))}
-      ${tile(l.events, t('seasons.events'))}
-      ${tile(l.mysteries, t('dev.mysteries'))}
-    </div>
-    <div class="quick">
-      <a class="btn btn-primary" href="#dev/character/new">＋ ${h(t('dev.newCharacter'))}</a>
-      <a class="btn btn-primary" href="#dev/group/new">＋ ${h(t('dev.newGroup'))}</a>
-      <a class="btn btn-primary" href="#dev/season/new">＋ ${h(t('dev.newSeason'))}</a>
-      <a class="btn" href="#dev/image/new">＋ ${h(t('dev.newImage'))}</a>
-      <a class="btn" href="#dev/mystery/new">＋ ${h(t('dev.newMystery'))}</a>
-    </div>
-    <p class="muted small">${h(t('dev.roleNote', { roles: state.roles.map(r => t('role.' + r)).join(', ') }))}</p>`;
 }
 
 // ─── Characters: list ──────────────────────────────────────────────────
@@ -489,33 +482,54 @@ async function imageEditor(el, id, ctx) {
 
 // ─── Access (admins) ───────────────────────────────────────────────────
 async function access(el, _, ctx) {
-  const staff = await api.listStaff();
+  const [staff, sessions] = await Promise.all([api.listStaff(), api.listDevSessions()]);
   if (!ctx.isCurrent()) return;
   el.innerHTML = `
-    <h1 class="display">${h(t('dev.access'))}</h1>
-    <p class="muted">${h(t('access.help'))}</p>
-    <form class="panel grant" id="grant">
-      <label class="field"><span>${h(t('auth.email'))}</span><input type="email" name="email" required dir="ltr"></label>
-      <label class="field"><span>${h(t('access.role'))}</span><select name="role">
-        <option value="developer">${h(t('role.developer'))}</option><option value="admin">${h(t('role.admin'))}</option></select></label>
-      <button class="btn btn-primary">${h(t('access.grant'))}</button>
-    </form>
-    <ul class="admin-list">${staff.map(s => `
-      <li class="admin-row" data-u="${h(s.user_id)}" data-r="${h(s.role)}">
-        <div class="admin-main"><span class="admin-title" dir="ltr">${h(s.email)}</span>
-          <div class="row-wrap small"><span class="badge">${h(t('role.' + s.role))}</span><span class="muted">${h(fmtDate(s.granted_at))}</span></div></div>
-        <div class="admin-actions">${s.user_id === state.user.id && s.role === 'admin' ? '' :
-          `<button class="btn btn-small btn-ghost btn-danger-text" data-revoke>${h(t('access.revoke'))}</button>`}</div>
-      </li>`).join('')}</ul>`;
+    <div class="toolbar"><div><h1 class="page-title">${h(t('dev.access'))}</h1><p class="muted">${h(t('access.help'))}</p></div></div>
+    <section class="panel">
+      <h2 class="kicker">${h(t('access.sessions'))}</h2>
+      <p class="muted small">${h(t('access.sessionsHelp'))}</p>
+      ${sessions.length ? `<ul class="admin-list">${sessions.map(x => `
+        <li class="admin-row" data-s="${h(x.user_id)}">
+          <span class="avatar">${h((x.email || '?').charAt(0).toUpperCase())}</span>
+          <div class="admin-main"><span class="admin-title" dir="ltr">${h(x.email)}</span>
+            <div class="row-wrap small"><span class="muted">${h(t('access.since', { d: fmtDate(x.started_at) }))}</span><span class="muted">${h(t('access.until', { d: new Date(x.expires_at).toLocaleTimeString() }))}</span></div></div>
+          <div class="admin-actions">${x.user_id === state.user.id ? `<span class="badge">${h(t('access.you'))}</span>` :
+            `<button class="btn btn-small btn-ghost btn-danger-text" data-end>${h(t('access.end'))}</button>`}</div>
+        </li>`).join('')}</ul>` : `<p class="muted small empty-inline">${h(t('access.noSessions'))}</p>`}
+    </section>
+    <section class="panel">
+      <h2 class="kicker">${h(t('access.admins'))}</h2>
+      <form class="grant" id="grant">
+        <label class="field"><span>${h(t('auth.email'))}</span><input type="email" name="email" required dir="ltr"></label>
+        <label class="field"><span>${h(t('access.role'))}</span><select name="role">
+          <option value="admin">${h(t('role.admin'))}</option></select></label>
+        <button class="btn btn-primary">${h(t('access.grant'))}</button>
+      </form>
+      <ul class="admin-list">${staff.map(x => `
+        <li class="admin-row" data-u="${h(x.user_id)}" data-r="${h(x.role)}">
+          <span class="avatar">${h((x.email || '?').charAt(0).toUpperCase())}</span>
+          <div class="admin-main"><span class="admin-title" dir="ltr">${h(x.email)}</span>
+            <div class="row-wrap small"><span class="badge">${h(t('role.' + x.role))}</span><span class="muted">${h(fmtDate(x.granted_at))}</span></div></div>
+          <div class="admin-actions">${x.user_id === state.user.id && x.role === 'admin' ? '' :
+            `<button class="btn btn-small btn-ghost btn-danger-text" data-revoke>${h(t('access.revoke'))}</button>`}</div>
+        </li>`).join('')}</ul>
+    </section>`;
+  const reload = () => access(el, _, ctx);
   $('#grant', el).onsubmit = async e => {
     e.preventDefault();
-    try { await api.grantRole(e.target.email.value.trim(), e.target.role.value); toast(t('dev.saved')); access(el, _, ctx); }
+    try { await api.grantRole(e.target.email.value.trim(), e.target.role.value); toast(t('dev.saved')); reload(); }
     catch (ex) { toast(errMsg(ex), 'error'); }
   };
   $$('[data-revoke]', el).forEach(b => b.onclick = async () => {
     const row = b.closest('[data-u]');
     if (!await confirmDialog(t('access.confirmRevoke'), { ok: t('access.revoke') })) return;
-    try { await api.revokeRole(row.dataset.u, row.dataset.r); toast(t('dev.saved')); access(el, _, ctx); }
+    try { await api.revokeRole(row.dataset.u, row.dataset.r); toast(t('dev.saved')); reload(); }
+    catch (ex) { toast(errMsg(ex), 'error'); }
+  });
+  $$('[data-end]', el).forEach(b => b.onclick = async () => {
+    if (!await confirmDialog(t('access.confirmEnd'), { ok: t('access.end') })) return;
+    try { await api.endDevSession(b.closest('[data-s]').dataset.s); toast(t('dev.saved')); reload(); }
     catch (ex) { toast(errMsg(ex), 'error'); }
   });
 }

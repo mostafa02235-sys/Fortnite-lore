@@ -169,3 +169,5 @@ export async function stats() {
 export async function listStaff() { return ok(await sb.rpc('lore_list_staff')); }
 export async function grantRole(email, role) { ok(await sb.rpc('lore_grant_role', { _email: email, _role: role })); }
 export async function revokeRole(userId, role) { ok(await sb.rpc('lore_revoke_role', { _user_id: userId, _role: role })); }
+export async function listDevSessions() { return ok(await sb.rpc('lore_list_dev_sessions')); }
+export async function endDevSession(userId) { ok(await sb.rpc('lore_end_dev_session', { _user_id: userId })); }

@@ -3,6 +3,7 @@ import { h, $, $$, sanitizeHtml, excerpt, fmtDate, statusBadge, textToHtml, debo
 import { hydrateMedia } from '../media.js';
 import * as api from '../api.js';
 import { state } from '../state.js';
+import { icon } from '../icons.js';
 import * as lore from '../api-lore.js';
 import { go } from '../app.js';
 
@@ -44,54 +45,76 @@ export function imageCard(r) {
 }
 
 const loading = () => `<div class="wrap"><div class="skeleton-grid">${'<div class="skel"></div>'.repeat(8)}</div></div>`;
-const emptyState = (title, body = '') => `<div class="empty"><h2>${h(title)}</h2>${body ? `<p class="muted">${h(body)}</p>` : ''}</div>`;
+const emptyState = (title, body = '') => `<div class="empty"><div class="empty-icon">${icon('sparkle', 22)}</div><h2>${h(title)}</h2>${body ? `<p class="muted">${h(body)}</p>` : ''}</div>`;
 
 // ─── Home ──────────────────────────────────────────────────────────────
 export async function home(main, _, ctx) {
   main.innerHTML = loading();
-  const [chars, imgs, teams, seasons] = await Promise.all([
-    api.listCharacters(), api.listArchive(), lore.listGroups(), lore.listSeasons(),
+  const [chars, imgs, teams, seasons, mysteries] = await Promise.all([
+    api.listCharacters(), api.listArchive(), lore.listGroups(), lore.listSeasons(), lore.listMysteries(),
   ]);
   if (!ctx.isCurrent()) return;
   const featured = [...chars].sort((a, b) => (b.published_at || '').localeCompare(a.published_at || '')).slice(0, 8);
-  const heroImg = imgs[0];
+  const latest = seasons.at(-1);
+  const heroPath = latest?.cover_path || imgs[0]?.storage_path;
+  const stat = (n, key, href) => `<a class="hero-stat" href="#${href}"><strong>${n}</strong><span>${h(t(key))}</span></a>`;
+  const head = (key, href) => `<header class="section-head"><h2 class="section-title">${h(t(key))}</h2>${href ? `<a href="#${href}" class="more">${h(t('common.viewAll'))} <span aria-hidden="true">→</span></a>` : ''}</header>`;
   main.innerHTML = `
-    <section class="hero">
-      ${heroImg ? `<div class="hero-bg" data-bg="${h(heroImg.storage_path)}"></div>` : '<div class="hero-bg hero-bg-empty"></div>'}
+    <section class="hero home-hero">
+      ${heroPath ? `<div class="hero-bg" data-bg="${h(heroPath)}"></div>` : '<div class="hero-bg hero-bg-empty"></div>'}
       <div class="hero-shade"></div>
       <div class="hero-copy wrap">
         <p class="eyebrow">${h(t('brand.tagline'))}</p>
         <h1 class="display display-xl">${h(t('home.title'))}</h1>
         <p class="lead">${h(t('home.lead'))}</p>
-        <div class="row-wrap">
-          <a class="btn btn-primary" href="#story">${h(t('home.readStory'))}</a>
-          <a class="btn" href="#characters">${h(t('home.browseCharacters'))}</a>
-          <a class="btn" href="#timeline">${h(t('nav.timeline'))}</a>
+        <div class="row-wrap hero-actions">
+          <a class="btn btn-primary btn-lg" href="#story">${h(t('home.readStory'))}</a>
+          <a class="btn btn-lg" href="#characters">${h(t('home.browseCharacters'))}</a>
+        </div>
+        <div class="hero-stats">
+          ${stat(seasons.length, 'nav.seasons', 'seasons')}${stat(chars.length, 'nav.characters', 'characters')}
+          ${stat(teams.length, 'nav.groups', 'groups')}${stat(imgs.length, 'nav.images', 'images')}
         </div>
       </div>
     </section>
-    ${seasons.length ? `<section class="wrap section">
-      <header class="section-head"><h2 class="display">${h(t('nav.seasons'))}</h2><a href="#seasons" class="more">${h(t('common.viewAll'))} →</a></header>
-      <div class="season-strip">${seasons.slice(-8).reverse().map(x => `<a class="season-chip" href="#season/${h(x.id)}">
+    ${latest ? `<section class="wrap section">
+      ${head('home.latestSeason')}
+      <a class="spotlight" href="#season/${h(latest.id)}">
+        <div class="spotlight-media">${latest.cover_path ? `<img data-path="${h(latest.cover_path)}" alt="">` : '<span class="ph ph-wide"></span>'}</div>
+        <div class="spotlight-copy">
+          <p class="eyebrow">${h(chapterSeason(latest) || t('nav.seasons'))}</p>
+          <h3 class="spotlight-title" dir="auto">${h(latest.name)}</h3>
+          <p class="muted clamp-3" dir="auto">${h(excerpt(latest.summary, 260))}</p>
+          <span class="btn btn-small">${h(t('story.readFull'))} <span aria-hidden="true">→</span></span>
+        </div>
+      </a>
+    </section>` : ''}
+    ${seasons.length > 1 ? `<section class="wrap section">
+      ${head('nav.seasons', 'seasons')}
+      <div class="season-strip">${seasons.slice(-10).reverse().map(x => `<a class="season-chip" href="#season/${h(x.id)}">
         ${x.cover_path ? `<img data-path="${h(x.cover_path)}" alt="">` : '<span class="ph ph-wide"></span>'}
         <span class="season-chip-cap"><small>${h(chapterSeason(x))}</small><strong dir="auto">${h(x.name)}</strong></span></a>`).join('')}</div>
     </section>` : ''}
     <section class="wrap section">
-      <header class="section-head"><h2 class="display">${h(t('home.featured'))}</h2><a href="#characters" class="more">${h(t('common.viewAll'))} →</a></header>
+      ${head('home.featured', 'characters')}
       ${featured.length ? `<div class="grid-chars">${featured.map(characterCard).join('')}</div>` : emptyState(t('characters.empty'))}
     </section>
+    ${teams.length || mysteries.length ? `<section class="wrap section home-split">
+      ${teams.length ? `<div>${head('nav.groups', 'groups')}<div class="team-list">${teams.slice(0, 5).map(teamChip).join('')}</div></div>` : ''}
+      ${mysteries.length ? `<div>${head('nav.mysteries', 'mysteries')}<div class="mystery-list">${mysteries.slice(0, 5).map(m => `
+        <a class="mystery-row" href="#mystery/${h(m.id)}"><span class="badge mys-${h(m.status)}">${h(t('mysteries.' + m.status))}</span><strong dir="auto">${h(m.title)}</strong></a>`).join('')}</div></div>` : ''}
+    </section>` : ''}
     <section class="wrap section">
-      <header class="section-head"><h2 class="display">${h(t('home.latestImages'))}</h2><a href="#images" class="more">${h(t('common.viewAll'))} →</a></header>
+      ${head('home.latestImages', 'images')}
       ${imgs.length ? `<div class="grid-imgs">${imgs.slice(0, 6).map(imageCard).join('')}</div>` : emptyState(t('images.empty'))}
-    </section>
-    ${teams.length ? `<section class="wrap section">
-      <header class="section-head"><h2 class="display">${h(t('nav.groups'))}</h2><a href="#groups" class="more">${h(t('common.viewAll'))} →</a></header>
-      <div class="team-strip">${teams.slice(0, 8).map(teamChip).join('')}</div></section>` : ''}`;
+    </section>`;
   hydrateMedia(main);
 }
 
-const teamChip = g => `<a class="team-chip" href="#group/${h(g.id)}"><strong dir="auto">${h(g.name)}</strong>
-  <span class="muted small">${h(t('groups.memberCount', { n: g.members?.[0]?.count ?? 0 }))}</span></a>`;
+const teamChip = g => `<a class="team-row" href="#group/${h(g.id)}">
+  <span class="group-logo group-logo-sm">${g.logo_path ? `<img data-path="${h(g.logo_path)}" alt="">` : h((g.name || '?').charAt(0))}</span>
+  <span class="team-row-main"><strong dir="auto">${h(g.name)}</strong><small class="muted" dir="auto">${h(excerpt(g.description, 90))}</small></span>
+  <span class="count">${h(t('groups.memberCount', { n: g.members?.[0]?.count ?? 0 }))}</span></a>`;
 
 // ─── Character list ────────────────────────────────────────────────────
 export async function characters(main, _, ctx) {

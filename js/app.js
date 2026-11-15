@@ -1,8 +1,10 @@
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { t, getLang, setLang, applyLang } from './i18n.js';
-import { h, $, toast, errMsg } from './util.js';
+import { h, $, errMsg } from './util.js';
 import { myRoles } from './api.js';
+import { icon } from './icons.js';
+import { loadDevSession, openDevDialog, devTimeLeft } from './devmode.js';
 import * as pub from './views/public.js';
 import * as auth from './views/auth.js';
 import * as dev from './views/dev.js';
@@ -46,13 +48,15 @@ export async function render() {
   const path = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
   const main = $('#main');
   renderNav(path);
+  closeMenu();
 
   const match = routes.map(([re, view, opts]) => [path.match(re), view, opts || {}]).find(([m]) => m);
   if (!match) { main.innerHTML = notFound(); return; }
   const [m, view, opts] = match;
 
+  document.body.classList.toggle('is-auth', !state.user || /^(login|reset)$/.test(path));
   if (!opts.open && !state.user) { return auth.gate(main, path); }
-  if (opts.dev && !state.isDev) { main.innerHTML = forbidden(); return; }
+  if (opts.dev && !state.isDev) { devLocked(main); return; }
 
   main.classList.remove('view-in');
   main.setAttribute('aria-busy', 'true');
@@ -61,7 +65,7 @@ export async function render() {
     await view(main, m[1], { isCurrent: () => seq === renderSeq });
   } catch (e) {
     console.error(e);
-    if (seq === renderSeq) main.innerHTML = `<section class="wrap empty"><h1>${h(t('error.title'))}</h1><p>${h(errMsg(e))}</p></section>`;
+    if (seq === renderSeq) main.innerHTML = `<section class="wrap empty-page"><div class="empty-icon">${icon('alert', 28)}</div><h1>${h(t('error.title'))}</h1><p class="muted">${h(errMsg(e))}</p><a class="btn" href="#">${h(t('nav.home'))}</a></section>`;
   }
   if (seq !== renderSeq) return;
   main.removeAttribute('aria-busy');
@@ -70,49 +74,104 @@ export async function render() {
 }
 
 function notFound() {
-  return `<section class="wrap empty"><h1>${h(t('error.notFound'))}</h1><a class="btn" href="#">${h(t('nav.home'))}</a></section>`;
+  return `<section class="wrap empty-page"><div class="empty-icon">${icon('help', 28)}</div><h1>${h(t('error.notFound'))}</h1><p class="muted">${h(t('error.notFoundBody'))}</p><a class="btn" href="#">${h(t('nav.home'))}</a></section>`;
 }
-function forbidden() {
-  return `<section class="wrap empty"><h1>${h(t('error.devOnly'))}</h1><p>${h(t('error.devOnlyBody'))}</p><a class="btn" href="#">${h(t('nav.home'))}</a></section>`;
+
+/** #dev without an active Developer Mode session: offer the access dialog. */
+function devLocked(main) {
+  main.innerHTML = `
+    <section class="wrap empty-page dev-locked">
+      <div class="empty-icon">${icon('lock', 28)}</div>
+      <p class="eyebrow">${h(t('nav.dev'))}</p>
+      <h1>${h(t('devmode.lockedTitle'))}</h1>
+      <p class="muted">${h(t('devmode.lockedBody'))}</p>
+      <div class="row-wrap center"><button class="btn btn-primary" id="dev-unlock">${icon('key', 16)} ${h(t('devmode.enter'))}</button>
+        <a class="btn btn-ghost" href="#">${h(t('nav.home'))}</a></div>
+    </section>`;
+  main.classList.add('view-in');
+  $('#dev-unlock').onclick = async () => { if (await openDevDialog()) render(); };
 }
 
 const NAV = [
-  ['', 'nav.home'], ['story', 'nav.story'], ['chapters', 'nav.chapters', ['chapter']], ['seasons', 'nav.seasons', ['season', 'event']],
-  ['characters', 'nav.characters', ['character']], ['groups', 'nav.groups', ['group', 'teams', 'team']], ['images', 'nav.images', ['image']],
-  ['timeline', 'nav.timeline'], ['mysteries', 'nav.mysteries', ['mystery']],
+  ['explore', [
+    ['', 'nav.home', 'home'], ['story', 'nav.story', 'book'], ['chapters', 'nav.chapters', 'layers', ['chapter']],
+    ['seasons', 'nav.seasons', 'calendar', ['season', 'event']], ['timeline', 'nav.timeline', 'clock'],
+  ]],
+  ['encyclopedia', [
+    ['characters', 'nav.characters', 'user', ['character']], ['groups', 'nav.groups', 'shield', ['group', 'teams', 'team']],
+    ['images', 'nav.images', 'image', ['image']], ['mysteries', 'nav.mysteries', 'help', ['mystery']],
+  ]],
 ];
 
 function renderNav(path) {
   const top = path.split('/')[0];
-  const isActive = (href, also = []) => top === href || also.includes(top);
-  $('#nav').innerHTML = NAV.map(([href, key, also]) =>
-    `<a href="#${href}" class="nav-link ${isActive(href, also) ? 'active' : ''}" ${isActive(href, also) ? 'aria-current="page"' : ''}>${h(t(key))}</a>`).join('')
-    + `<a href="#search" class="nav-link nav-only-mobile ${top === 'search' ? 'active' : ''}">${h(t('nav.search'))}</a>`
-    + (state.user ? `<a href="#profile" class="nav-link nav-only-mobile ${top === 'profile' ? 'active' : ''}">${h(t('nav.profile'))}</a>` : '')
-    + (state.isDev ? `<a href="#dev" class="nav-link nav-dev ${top === 'dev' ? 'active' : ''}">${h(t('nav.dev'))}</a>` : '');
-  const icon = (d) => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const link = ([href, key, ic, also = []]) => {
+    const on = top === href || also.includes(top);
+    return `<a href="#${href}" class="nav-link ${on ? 'active' : ''}" ${on ? 'aria-current="page"' : ''}>${icon(ic)}<span>${h(t(key))}</span></a>`;
+  };
+  $('#nav').innerHTML = NAV.map(([group, items]) => `
+    <div class="nav-group"><p class="nav-label">${h(t('nav.group.' + group))}</p>${items.map(link).join('')}</div>`).join('')
+    + `<div class="nav-group"><p class="nav-label">${h(t('nav.group.account'))}</p>
+        ${link(['search', 'nav.search', 'search'])}
+        ${state.user ? link(['profile', 'nav.profile', 'user']) : ''}
+        ${state.user ? (state.isDev
+          ? `<a href="#dev" class="nav-link nav-dev ${top === 'dev' ? 'active' : ''}">${icon('grid')}<span>${h(t('nav.dev'))}</span><small class="nav-pill">${h(devTimeLeft())}</small></a>`
+          : `<button type="button" class="nav-link nav-devmode" id="nav-devmode">${icon('lock')}<span>${h(t('devmode.enter'))}</span></button>`) : ''}
+      </div>`;
+  const u = state.user;
   $('#account').innerHTML = `
-    <a class="icon-btn ${top === 'search' ? 'is-on' : ''}" href="#search" aria-label="${h(t('nav.search'))}" title="${h(t('nav.search'))}">${icon('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>')}</a>
-    <button class="chip" id="lang-btn" aria-label="${h(t('nav.language'))}">${getLang() === 'ar' ? 'EN' : 'ع'}</button>
-    ${state.user
-      ? `<a class="icon-btn ${top === 'profile' ? 'is-on' : ''}" href="#profile" aria-label="${h(t('nav.profile'))}" title="${h(t('nav.profile'))}">${icon('<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>')}</a>`
-      : `<a class="chip" href="#login">${h(t('nav.signIn'))}</a>`}`;
+    <div class="lang-switch" role="group" aria-label="${h(t('nav.language'))}">
+      <button type="button" id="lang-btn" class="lang-opt" aria-label="${h(t('nav.language'))}">
+        <span class="${getLang() === 'en' ? 'on' : ''}">EN</span><span class="${getLang() === 'ar' ? 'on' : ''}">ع</span></button>
+    </div>
+    ${u ? `<a class="me" href="#profile"><span class="avatar">${h((u.email || '?').charAt(0).toUpperCase())}</span>
+          <span class="me-text"><strong dir="ltr">${h(u.email || '')}</strong><small>${h(state.isDev ? t('devmode.active') : t('profile.member'))}</small></span></a>`
+       : `<a class="btn btn-primary btn-block" href="#login">${h(t('nav.signIn'))}</a>`}`;
   $('#lang-btn').onclick = () => { setLang(getLang() === 'ar' ? 'en' : 'ar'); render(); };
-  document.body.classList.toggle('menu-open', false);
-  requestAnimationFrame(() => $('#nav .active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+  const dm = $('#nav-devmode');
+  if (dm) dm.onclick = async () => { closeMenu(); if (await openDevDialog()) go('dev'); };
+  $('#m-search').classList.toggle('is-on', top === 'search');
 }
 
-async function loadUser(session) {
+function closeMenu() { document.body.classList.remove('menu-open'); $('#menu-btn')?.setAttribute('aria-expanded', 'false'); }
+
+export async function loadUser(session) {
   state.session = session;
   state.user = session?.user || null;
   try { state.roles = state.user ? await myRoles(state.user.id) : []; }
   catch (e) { console.warn(e); state.roles = []; }
+  await loadDevSession();
+  scheduleExpiry();
 }
+
+// When the Developer Mode session runs out, refresh so dev controls disappear.
+let expiryTimer;
+function scheduleExpiry() {
+  clearTimeout(expiryTimer);
+  if (!state.devUntil) return;
+  const ms = new Date(state.devUntil) - Date.now();
+  if (ms > 0 && ms < 2 ** 31) expiryTimer = setTimeout(async () => { await loadDevSession(); render(); }, ms + 1000);
+}
+export function onDevChange() { scheduleExpiry(); }
 
 async function boot() {
   applyLang();
-  $('#menu-btn').onclick = () => document.body.classList.toggle('menu-open');
-  $('#nav').addEventListener('click', e => { if (e.target.closest('a')) document.body.classList.remove('menu-open'); });
+  $('#menu-btn').innerHTML = icon('menu', 22);
+  $('#m-search').innerHTML = icon('search', 20);
+  $('#menu-btn').onclick = () => {
+    const open = !document.body.classList.contains('menu-open');
+    document.body.classList.toggle('menu-open', open);
+    $('#menu-btn').setAttribute('aria-expanded', String(open));
+  };
+  $('#menu-close').innerHTML = icon('x', 20);
+  $('#menu-close').onclick = closeMenu;
+  $('#scrim').onclick = closeMenu;
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeMenu();
+    if (e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) && !document.activeElement?.isContentEditable && state.user) {
+      e.preventDefault(); go('search');
+    }
+  });
 
   const { data } = await sb.auth.getSession();
   await loadUser(data.session);
@@ -134,5 +193,5 @@ async function boot() {
 
 boot().catch(e => {
   console.error(e);
-  $('#main').innerHTML = `<section class="wrap empty"><h1>${h(t('error.title'))}</h1><p>${h(errMsg(e))}</p></section>`;
+  $('#main').innerHTML = `<section class="wrap empty-page"><h1>${h(t('error.title'))}</h1><p>${h(errMsg(e))}</p></section>`;
 });

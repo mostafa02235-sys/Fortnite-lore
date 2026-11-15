@@ -31,6 +31,10 @@ with sync_playwright() as p:
         pg.goto(U + '#' + h); pg.wait_for_selector(sel)
     def saved(prefix):
         pg.wait_for_url(re.compile(prefix + r'[0-9a-f-]{36}$')); pg.wait_for_timeout(250)
+    def unlock(code):
+        pg.click('#dev-unlock'); pg.wait_for_selector('.devcode input[name=code]')
+        pg.fill('.devcode input[name=code]', code); pg.click('.devcode button[type=submit]')
+    go('dev', '.dev-locked'); unlock('PREVIEW'); pg.wait_for_selector('.stats')
     go('', '.hero')
     # Seed three characters (character CRUD is covered by ui_test.py)
     pg.evaluate("""() => { const c = (id, name, pub) => __mock.db.characters.push({ id, name, story: '<p>Story of '+name+'</p>', status: 'alive', is_published: pub, team_id: null, updated_at: new Date().toISOString() });
@@ -40,7 +44,7 @@ with sync_playwright() as p:
     nav = pg.inner_text('#nav').lower()
     check('nav has Home, Story Archive, Chapters, Seasons, Characters, Groups, Image Archive, Timeline, Mysteries',
           all(k in nav for k in ['home', 'story archive', 'chapters', 'seasons', 'characters', 'groups', 'image archive', 'timeline', 'mysteries']))
-    check('header has Search and Profile', pg.locator('#account a[href="#search"]').count() == 1 and pg.locator('#account a[href="#profile"]').count() == 1)
+    check('sidebar has Search, Profile and Developer', all(pg.locator(f'#nav a[href="{x}"]').count() == 1 for x in ['#search', '#profile', '#dev']) and pg.locator('#account a[href="#profile"]').count() == 1)
 
     # ── Relationship labels (configurable) ──
     go('dev/labels', '#ladd')
@@ -227,26 +231,43 @@ with sync_playwright() as p:
     pg.click('#menu-btn'); pg.wait_for_timeout(300)
     check('mobile menu shows all sections incl. Search + Profile', all(k in pg.inner_text('#nav').lower() for k in ['story archive', 'timeline', 'mysteries', 'search', 'profile']))
     pg.screenshot(path=f'{SHOTS}/l12-m-menu.png')
-    pg.click('#menu-btn')
+    pg.click('#menu-close'); pg.wait_for_timeout(300)
+    check('mobile menu closes', not pg.evaluate("document.body.classList.contains('menu-open')"))
     pg.set_viewport_size({'width': 1280, 'height': 900})
 
     # ── Normal user visibility ──
     go('dev/seasons', '.admin-row')  # unpublish nothing; check drafts are hidden for readers
-    pg.evaluate("() => { __mock.role = 'user'; __mock.db.lore_user_roles = []; }")
     go('profile', '#p-out'); pg.click('#p-out'); go('login', '#auth-form')
     pg.fill('input[name=email]', 'reader@test.com'); pg.fill('input[name=password]', 'password123'); pg.click('#auth-form button[type=submit]'); pg.wait_for_timeout(400)
+    go('dev', '.dev-locked')
+    for i in range(5):
+        if i == 0: unlock('NOPE')
+        else: pg.fill('.devcode input[name=code]', 'NOPE' + str(i)); pg.click('.devcode button[type=submit]')
+        pg.wait_for_timeout(150)
+    pg.fill('.devcode input[name=code]', 'PREVIEW'); pg.click('.devcode button[type=submit]'); pg.wait_for_timeout(200)
+    check('after 5 wrong codes even the right code is refused (lockout)', 'too many' in pg.inner_text('.devcode .form-msg').lower() and pg.evaluate("__mock.db.lore_dev_sessions.length") == 0)
+    pg.click('.devcode [data-cancel]'); pg.wait_for_selector('.modal-back', state='detached')
+    pg.evaluate("__mock.fails = 0")
     go('group/' + gid, '.group-page')
     check('reader: draft character hidden from group members', pg.locator('.group-page .card-char').count() == 2 and 'secret agent' not in pg.inner_text('.group-page').lower())
     check('reader: no edit buttons', pg.locator('a[href^="#dev"]').count() == 0)
     r = pg.evaluate("async () => { const m = await import('/js/supabase.js'); const a = await m.sb.from('seasons').insert({ name: 'hack' }); const b = await m.sb.rpc('lore_reorder_events', { _season_id: 'x', _ids: [] }); return !!a.error && !!b.error }")
     check('reader: writes refused by backend', r)
     go('dev/season/' + sid, '#main'); pg.wait_for_timeout(300)
-    check('reader: dashboard blocked', 'developers only' in pg.inner_text('#main').lower())
+    check('reader: dashboard blocked', 'developer mode is locked' in pg.inner_text('#main').lower())
 
     # ── Delete cascade (developer) ──
-    pg.evaluate("() => { __mock.role = 'developer'; __mock.db.lore_user_roles = [{ user_id: 'u-dev', role: 'developer' }]; }")
     go('profile', '#p-out'); pg.click('#p-out'); go('login', '#auth-form')
     pg.fill('input[name=email]', 'dev@test.com'); pg.fill('input[name=password]', 'password123'); pg.click('#auth-form button[type=submit]'); pg.wait_for_timeout(400)
+    go('profile', '#dm-enter'); pg.click('#dm-enter'); pg.wait_for_selector('.devcode input'); pg.fill('.devcode input[name=code]', 'PREVIEW'); pg.click('.devcode button[type=submit]')
+    pg.wait_for_selector('#dm-exit'); check('Developer Mode can be unlocked from the profile page', True)
+    # new dashboard sections
+    go('dev/stories', '#sf'); check('Stories manager lists long-form entries', pg.locator('#rows .admin-row').count() >= 4)
+    go('dev/publishing', '#pf'); pg.click('[data-st=""]'); pg.wait_for_timeout(100)
+    n0 = pg.evaluate("__mock.db.characters.filter(c=>c.is_published).length")
+    pg.locator('#rows .admin-row', has_text='Secret Agent').locator('[data-toggle]').click(); pg.wait_for_timeout(300)
+    check('Publishing manager publishes a draft', pg.evaluate("__mock.db.characters.filter(c=>c.is_published).length") == n0 + 1)
+    go('dev/timeline', '#tl-season'); check('Timeline manager shows season events', pg.locator('#ev-list .ev-row').count() == 3)
     go('dev/season/' + sid, '#sform'); pg.click('.action-bar [data-a=delete]'); pg.click('.modal .btn-danger'); pg.wait_for_url(re.compile(r'#dev/seasons$')); pg.wait_for_timeout(300)
     check('delete season: events, links, images, refs removed; mystery kept unlinked; files removed',
           pg.evaluate("[__mock.db.seasons.length, __mock.db.season_events.length, __mock.db.event_characters.length, __mock.db.season_groups.length, __mock.db.season_images.length, __mock.db.season_references.length, __mock.db.mysteries.length, __mock.db.mysteries[0].season_id === null, [...__mock.files.keys()].some(k => k.startsWith('seasons/') || k.startsWith('events/'))].join()") == '0,0,0,0,0,0,1,true,false')

@@ -303,3 +303,24 @@ export async function loreStats() {
   ]);
   return { groups, groupsPub, seasons, seasonsPub, events, mysteries };
 }
+
+// ─── Content inventory (developer: stories, publishing, overview) ─────
+export async function contentInventory() {
+  const [c, g, s, m, a] = await Promise.all([
+    sb.from('characters').select('id,name,story,is_published,updated_at').then(ok),
+    sb.from('groups').select('id,name,description,story,history,goals,is_published,updated_at').then(ok),
+    sb.from('seasons').select('id,name,summary,story,chapter_number,season_number,is_published,updated_at').then(ok),
+    sb.from('mysteries').select('id,title,body,is_published,updated_at').then(ok),
+    sb.from('image_archive').select('id,image_name,story,storage_path,is_published,updated_at,uploaded_at').then(ok),
+  ]);
+  const item = (type, r, title, story, extra = {}) => ({
+    type, id: r.id, title, story: story || '', is_published: r.is_published, updated_at: r.updated_at || r.uploaded_at, ...extra,
+  });
+  return [
+    ...c.map(r => item('character', r, r.name, r.story)),
+    ...g.map(r => item('group', r, r.name, [r.description, r.story, r.history, r.goals].join(''))),
+    ...s.map(r => item('season', r, r.name, (r.summary || '') + (r.story || ''), { chapter_number: r.chapter_number, season_number: r.season_number })),
+    ...m.map(r => item('mystery', r, r.title, r.body)),
+    ...a.map(r => item('image', r, r.image_name, r.story, { storage_path: r.storage_path })),
+  ].sort((x, y) => String(y.updated_at || '').localeCompare(String(x.updated_at || '')));
+}

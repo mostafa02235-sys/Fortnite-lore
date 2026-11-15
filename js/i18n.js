@@ -274,6 +274,76 @@ Object.assign(ar, {
   'images.season': 'الموسم المرتبط',
 });
 
+
+// ─── Redesign + Developer Mode ────────────────────────────────────────
+Object.assign(en, {
+  'nav.group.explore': 'Explore', 'nav.group.encyclopedia': 'Encyclopedia', 'nav.group.account': 'Account', 'nav.searchPh': 'Search the archive',
+  'home.latestSeason': 'Latest season', 'error.notFoundBody': 'This page doesn’t exist or isn’t published yet.',
+  'gate.p1': 'Full character and faction stories', 'gate.p2': 'Every season, in order', 'gate.p3': 'Images, timeline and mysteries',
+  'auth.artLine': 'Every season, every faction, every legend of the Island — in one archive.',
+  'auth.signInSub': 'Welcome back. Sign in to continue reading.', 'auth.signUpSub': 'Create a free account to read the full archive.',
+  'auth.forgotSub': 'Enter your email and we’ll send you a reset link.',
+  'profile.langHelp': 'Choose the interface language. Arabic switches the layout to right-to-left.',
+  'profile.signOutHelp': 'Sign out of this device. Developer Mode ends too.', 'profile.newPasswordPh': 'New password (8+ characters)',
+  'devmode.title': 'Developer Mode', 'devmode.body': 'Enter the developer access code to manage official content.',
+  'devmode.label': 'Access code', 'devmode.unlock': 'Unlock', 'devmode.enter': 'Developer Mode', 'devmode.exit': 'Exit Developer Mode',
+  'devmode.show': 'Show code', 'devmode.hide': 'Hide code', 'devmode.active': 'Developer Mode',
+  'devmode.note': 'The code is checked on the server and never stored on this device. Access ends automatically after 8 hours.',
+  'devmode.unlocked': 'Developer Mode unlocked.', 'devmode.exited': 'You left Developer Mode.',
+  'devmode.invalid': 'That code isn’t correct.', 'devmode.remaining': '{n} attempts left before a short lock.',
+  'devmode.locked': 'Too many wrong attempts. Try again in {n} min.', 'devmode.notConfigured': 'Developer Mode isn’t set up on the server yet.',
+  'devmode.signin': 'Sign in first.', 'devmode.hoursLeft': '{n}h {m}m left', 'devmode.minsLeft': '{n} min left',
+  'devmode.lockedTitle': 'Developer Mode is locked', 'devmode.lockedBody': 'Content management needs the developer access code. Your normal account stays separate.',
+  'devmode.profileHelp': 'Manage characters, groups, seasons and the rest of the archive. Requires the access code.',
+  'devmode.activeHelp': 'Active on this account — {left}.',
+  'dev.overviewLead': 'Everything in the archive at a glance.', 'dev.quickCreate': 'Create', 'dev.waitingDrafts': 'Waiting drafts', 'dev.recent': 'Recently updated',
+  'dev.noDrafts': 'No drafts — everything is published.', 'dev.stories': 'Stories', 'dev.storiesLead': 'Every long-form story in the archive, with its length and state.',
+  'dev.type': 'Type', 'dev.allTypes': 'All types', 'dev.length': 'Length', 'dev.anyLength': 'Any length', 'dev.noStoryYet': 'No story yet',
+  'dev.under300': 'Under 300 words', 'dev.over1000': '1,000+ words', 'dev.editStory': 'Edit story',
+  'dev.publishing': 'Publishing', 'dev.publishingLead': 'Publish or unpublish anything from one place. Drafts are only visible in Developer Mode.',
+  'dev.drafts': 'Drafts', 'dev.everything': 'Everything', 'dev.timeline': 'Timeline', 'dev.editSeason': 'Edit season',
+  'dev.leaveUnsaved': 'You have unsaved changes. Leave anyway?',
+  'access.help': 'Admins can see who is in Developer Mode, end sessions and manage admin access.',
+  'access.sessions': 'Active Developer Mode sessions', 'access.sessionsHelp': 'Anyone who entered the access code. Sessions end on their own after 8 hours.',
+  'access.since': 'Since {d}', 'access.until': 'Until {d}', 'access.you': 'You', 'access.end': 'End session', 'access.noSessions': 'No active sessions.',
+  'access.admins': 'Admins', 'access.confirmEnd': 'End this Developer Mode session now?',
+});
+Object.assign(ar, {
+  'nav.group.explore': 'استكشف', 'nav.group.encyclopedia': 'الموسوعة', 'nav.group.account': 'الحساب', 'nav.searchPh': 'ابحث في الأرشيف',
+  'home.latestSeason': 'أحدث موسم', 'error.notFoundBody': 'هذه الصفحة غير موجودة أو لم تُنشر بعد.',
+  'gate.p1': 'قصص كاملة للشخصيات والفصائل', 'gate.p2': 'كل المواسم بالترتيب', 'gate.p3': 'الصور والخط الزمني والألغاز',
+  'auth.artLine': 'كل موسم، وكل فصيل، وكل أسطورة من الجزيرة — في أرشيف واحد.',
+  'auth.signInSub': 'أهلًا بعودتك. سجّل الدخول لمتابعة القراءة.', 'auth.signUpSub': 'أنشئ حسابًا مجانيًا لقراءة الأرشيف كاملًا.',
+  'auth.forgotSub': 'أدخل بريدك وسنرسل لك رابط الاستعادة.',
+  'profile.langHelp': 'اختر لغة الواجهة. العربية تجعل الاتجاه من اليمين لليسار.',
+  'profile.signOutHelp': 'تسجيل الخروج من هذا الجهاز. ينتهي وضع المطوّر أيضًا.', 'profile.newPasswordPh': 'كلمة مرور جديدة (8 أحرف أو أكثر)',
+  'devmode.title': 'وضع المطوّر', 'devmode.body': 'أدخل رمز وصول المطوّر لإدارة المحتوى الرسمي.',
+  'devmode.label': 'رمز الوصول', 'devmode.unlock': 'فتح', 'devmode.enter': 'وضع المطوّر', 'devmode.exit': 'الخروج من وضع المطوّر',
+  'devmode.show': 'إظهار الرمز', 'devmode.hide': 'إخفاء الرمز', 'devmode.active': 'وضع المطوّر',
+  'devmode.note': 'يُتحقق من الرمز على الخادم ولا يُحفظ على هذا الجهاز. ينتهي الوصول تلقائيًا بعد 8 ساعات.',
+  'devmode.unlocked': 'تم فتح وضع المطوّر.', 'devmode.exited': 'خرجت من وضع المطوّر.',
+  'devmode.invalid': 'الرمز غير صحيح.', 'devmode.remaining': 'متبقٍ {n} محاولات قبل قفل مؤقت.',
+  'devmode.locked': 'محاولات خاطئة كثيرة. حاول بعد {n} دقيقة.', 'devmode.notConfigured': 'وضع المطوّر غير مُعدّ على الخادم بعد.',
+  'devmode.signin': 'سجّل الدخول أولًا.', 'devmode.hoursLeft': 'متبقٍ {n}س {m}د', 'devmode.minsLeft': 'متبقٍ {n} دقيقة',
+  'devmode.lockedTitle': 'وضع المطوّر مقفل', 'devmode.lockedBody': 'إدارة المحتوى تحتاج رمز وصول المطوّر. يبقى حسابك العادي منفصلًا.',
+  'devmode.profileHelp': 'أدر الشخصيات والمجموعات والمواسم وبقية الأرشيف. يتطلب رمز الوصول.',
+  'devmode.activeHelp': 'مفعّل على هذا الحساب — {left}.',
+  'dev.overviewLead': 'كل ما في الأرشيف بنظرة واحدة.', 'dev.quickCreate': 'إنشاء', 'dev.waitingDrafts': 'مسودات بانتظار النشر', 'dev.recent': 'حُدّثت مؤخرًا',
+  'dev.noDrafts': 'لا مسودات — كل شيء منشور.', 'dev.stories': 'القصص', 'dev.storiesLead': 'كل القصص الطويلة في الأرشيف مع طولها وحالتها.',
+  'dev.type': 'النوع', 'dev.allTypes': 'كل الأنواع', 'dev.length': 'الطول', 'dev.anyLength': 'أي طول', 'dev.noStoryYet': 'لا قصة بعد',
+  'dev.under300': 'أقل من 300 كلمة', 'dev.over1000': '1000 كلمة فأكثر', 'dev.editStory': 'تعديل القصة',
+  'dev.publishing': 'النشر', 'dev.publishingLead': 'انشر أو ألغِ نشر أي شيء من مكان واحد. المسودات تظهر في وضع المطوّر فقط.',
+  'dev.drafts': 'المسودات', 'dev.everything': 'الكل', 'dev.timeline': 'الخط الزمني', 'dev.editSeason': 'تعديل الموسم',
+  'dev.leaveUnsaved': 'لديك تغييرات غير محفوظة. هل تريد المغادرة؟',
+  'access.help': 'يرى المدراء من في وضع المطوّر، ويمكنهم إنهاء الجلسات وإدارة صلاحية المدير.',
+  'access.sessions': 'جلسات وضع المطوّر النشطة', 'access.sessionsHelp': 'كل من أدخل رمز الوصول. تنتهي الجلسات تلقائيًا بعد 8 ساعات.',
+  'access.since': 'منذ {d}', 'access.until': 'حتى {d}', 'access.you': 'أنت', 'access.end': 'إنهاء الجلسة', 'access.noSessions': 'لا جلسات نشطة.',
+  'access.admins': 'المدراء', 'access.confirmEnd': 'إنهاء جلسة وضع المطوّر هذه الآن؟',
+});
+
+Object.assign(en, { 'groups.memberCount.one': '1 member', 'teams.count.one': '1 character', 'chapters.seasonCount.one': '1 season', 'editor.words.one': '1 word', 'devmode.exitShort': 'Exit' });
+Object.assign(ar, { 'groups.memberCount.one': 'عضو واحد', 'teams.count.one': 'شخصية واحدة', 'chapters.seasonCount.one': 'موسم واحد', 'editor.words.one': 'كلمة واحدة', 'devmode.exitShort': 'خروج' });
+
 const dicts = { en, ar };
 let lang = 'en';
 try {
@@ -291,10 +361,12 @@ export function applyLang() {
   document.documentElement.lang = lang;
   document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
   document.title = dicts[lang]['brand.name'];
-  const brand = document.querySelector('[data-brand]');
-  if (brand) brand.textContent = dicts[lang]['brand.name'];
+  document.querySelectorAll('[data-brand]').forEach(b => { b.textContent = dicts[lang]['brand.name']; });
+  document.querySelectorAll('[data-search-label]').forEach(b => { b.textContent = dicts[lang]['nav.searchPh']; });
 }
 export function t(key, vars) {
+  // Singular forms: 'key.one' is used when n is 1 (if defined).
+  if (vars && Number(vars.n) === 1 && (dicts[lang][key + '.one'] || en[key + '.one'])) key += '.one';
   let s = dicts[lang][key] ?? en[key] ?? key;
   if (vars) for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, v);
   return s;

@@ -3,14 +3,17 @@
 // simplified version of the database's Row Level Security rules.
 const T = ['teams', 'characters', 'character_images', 'image_archive', 'lore_user_roles', 'group_relationship_types', 'groups',
   'group_relationships', 'group_images', 'seasons', 'season_events', 'season_characters', 'season_groups', 'season_images',
-  'season_references', 'event_characters', 'event_groups', 'event_images', 'mysteries'];
+  'season_references', 'event_characters', 'event_groups', 'event_images', 'mysteries', 'lore_dev_sessions'];
 const db = Object.fromEntries(T.map(t => [t, []]));
 const files = new Map();
 const uid = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
-window.__mock = { db, files, role: 'developer', user: { id: 'u-dev', email: 'dev@test', created_at: now() }, signedIn: true };
+// devCode is a demo code for the offline preview and tests only. The live
+// site checks the real code on the server (see the developer_mode migration).
+window.__mock = { db, files, user: { id: 'u-dev', email: 'dev@test', created_at: now() }, signedIn: true, devCode: 'PREVIEW', fails: 0 };
 const M = window.__mock;
-const isDev = () => M.signedIn && (M.role === 'developer' || M.role === 'admin');
+const isDev = () => M.signedIn && db.lore_dev_sessions.some(x => x.user_id === M.user.id && new Date(x.expires_at) > new Date());
+const isAdmin = () => isDev() && db.lore_user_roles.some(r => r.user_id === M.user.id && r.role === 'admin');
 const find = (t, id) => db[t].find(r => r.id === id);
 const pub = (t, id) => !!find(t, id)?.is_published;
 const evPub = id => { const e = find('season_events', id); return !!e && pub('seasons', e.season_id); };
@@ -21,7 +24,7 @@ const visible = (t, r) => {
   switch (t) {
     case 'characters': case 'image_archive': case 'groups': case 'seasons': case 'mysteries': return r.is_published;
     case 'character_images': return pub('characters', r.character_id);
-    case 'lore_user_roles': return r.user_id === M.user.id;
+    case 'lore_user_roles': case 'lore_dev_sessions': return r.user_id === M.user.id;
     case 'group_relationships': return pub('groups', r.group_id) && pub('characters', r.character_id);
     case 'group_images': return pub('groups', r.group_id);
     case 'season_events': case 'season_images': case 'season_references': return pub('seasons', r.season_id);
@@ -195,7 +198,20 @@ export function createClient() {
         a._ids.forEach((id, i) => { const e = find('season_events', id); if (e && e.season_id === a._season_id) e.position = i; });
         return { data: null, error: null };
       }
-      if (M.role !== 'admin') return { data: null, error: { message: 'not authorized', code: '42501' } };
+      if (fn === 'lore_enter_dev_mode') {
+        if (!M.signedIn) return { data: { ok: false, reason: 'signin' }, error: null };
+        if (M.fails >= 5) return { data: { ok: false, reason: 'locked', retry_after: 900 }, error: null };
+        if (String(a._code || '').trim() !== M.devCode) { M.fails++; return { data: { ok: false, reason: 'invalid', remaining: Math.max(0, 5 - M.fails) }, error: null }; }
+        M.fails = 0;
+        const expires_at = new Date(Date.now() + 8 * 3600e3).toISOString();
+        db.lore_dev_sessions = db.lore_dev_sessions.filter(x => x.user_id !== M.user.id);
+        db.lore_dev_sessions.push({ user_id: M.user.id, started_at: now(), expires_at, email: M.user.email });
+        return { data: { ok: true, expires_at }, error: null };
+      }
+      if (fn === 'lore_exit_dev_mode') { db.lore_dev_sessions = db.lore_dev_sessions.filter(x => x.user_id !== M.user.id); return { data: null, error: null }; }
+      if (!isAdmin()) return { data: null, error: { message: 'not authorized', code: '42501' } };
+      if (fn === 'lore_list_dev_sessions') return { data: db.lore_dev_sessions.map(x => ({ ...x })), error: null };
+      if (fn === 'lore_end_dev_session') { db.lore_dev_sessions = db.lore_dev_sessions.filter(x => x.user_id !== a._user_id); return { data: null, error: null }; }
       if (fn === 'lore_list_staff') return { data: db.lore_user_roles.map(r => ({ ...r, email: r.email || 'x@test', granted_at: now() })), error: null };
       if (fn === 'lore_grant_role') { db.lore_user_roles.push({ user_id: uid(), role: a._role, email: a._email }); return { data: null, error: null }; }
       if (fn === 'lore_revoke_role') { db.lore_user_roles = db.lore_user_roles.filter(r => !(r.user_id === a._user_id && r.role === a._role)); return { data: null, error: null }; }
@@ -220,7 +236,6 @@ export function createClient() {
   };
 }
 
-// Seed: roles + default relationship labels (as the migration does)
-db.lore_user_roles.push({ user_id: 'u-dev', role: 'developer', email: 'dev@test' });
+// Seed: default relationship labels (as the migration does)
 [['Member', 'عضو'], ['Leader', 'قائد'], ['Former Member', 'عضو سابق'], ['Enemy', 'عدو'], ['Ally', 'حليف'], ['Unknown', 'غير معروف']]
   .forEach(([en, ar], i) => db.group_relationship_types.push({ id: uid(), label_en: en, label_ar: ar, sort_order: i }));

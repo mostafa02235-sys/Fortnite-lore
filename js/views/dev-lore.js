@@ -292,7 +292,7 @@ export async function seasonEditor(el, id, ctx) {
 }
 
 /** Reorder events without recreating them: drag & drop or ↑/↓, saved at once. */
-function timelineManager(list, season) {
+export function timelineManager(list, season) {
   let events = [...season.events];
   const draw = () => {
     list.innerHTML = events.length ? events.map((e, i) => `

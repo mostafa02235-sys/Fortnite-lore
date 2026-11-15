@@ -53,7 +53,8 @@ export function seed(M) {
   );
   db.event_images.push({ event_id: E2, image_id: A1 });
   db.mysteries.push({ id: uid(), title: 'A sample unanswered question', body: '<p>Theories and clues go here.</p>', status: 'open', season_id: S1, is_published: true, published_at: now, updated_at: now });
-  // Preview visitor is an admin so every dashboard section can be tried.
-  M.role = 'admin';
+  // The preview visitor is an admin, so after entering the demo code
+  // (PREVIEW) every dashboard section, including Access, can be tried.
+  M.user.email = 'you@preview';
   db.lore_user_roles.splice(0, db.lore_user_roles.length, { user_id: M.user.id, role: 'admin', email: 'you@preview' });
 }

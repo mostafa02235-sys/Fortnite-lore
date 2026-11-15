@@ -9,6 +9,8 @@ import { groupCard } from './groups.js';
 import { seasonCard } from './seasons.js';
 import { seasonLabel } from '../components.js';
 import { go, render } from '../app.js';
+import { icon } from '../icons.js';
+import { openDevDialog, exitDevMode, devTimeLeft } from '../devmode.js';
 
 const empty = msg => `<div class="empty"><p class="muted">${h(msg)}</p></div>`;
 const STATUSES = ['open', 'partial', 'solved'];
@@ -105,42 +107,65 @@ export async function search(main, _, ctx) {
 // ─── Profile ───────────────────────────────────────────────────────────
 export async function profile(main) {
   const u = state.user;
-  main.innerHTML = `
-    <section class="wrap-narrow page-head profile-page">
-      <p class="eyebrow">${h(t('nav.profile'))}</p>
-      <h1 class="display">${h(t('profile.title'))}</h1>
-      <div class="card stack">
-        <dl class="facts facts-col">
-          <div><dt>${h(t('auth.email'))}</dt><dd dir="ltr">${h(u.email || '')}</dd></div>
-          <div><dt>${h(t('profile.role'))}</dt><dd>${h(state.roles.length ? state.roles.map(r => t('role.' + r)).join(', ') : t('profile.member'))}</dd></div>
-          ${u.created_at ? `<div><dt>${h(t('profile.since'))}</dt><dd>${h(fmtDate(u.created_at))}</dd></div>` : ''}
-        </dl>
-      </div>
-      <div class="card stack">
-        <h2 class="kicker" style="margin:0">${h(t('nav.language'))}</h2>
-        <div class="seg">
-          <label><input type="radio" name="lang" value="en" ${getLang() === 'en' ? 'checked' : ''}><span>English</span></label>
-          <label><input type="radio" name="lang" value="ar" ${getLang() === 'ar' ? 'checked' : ''}><span>العربية</span></label>
+  const draw = () => {
+    main.innerHTML = `
+      <section class="wrap profile-page">
+        <header class="profile-head">
+          <span class="avatar avatar-lg">${h((u.email || '?').charAt(0).toUpperCase())}</span>
+          <div>
+            <p class="eyebrow">${h(t('nav.profile'))}</p>
+            <h1 class="page-title" dir="ltr">${h(u.email || '')}</h1>
+            <div class="row-wrap"><span class="badge">${h(t('profile.member'))}</span>
+              ${state.isDev ? `<span class="badge badge-dev">${icon('unlock', 12)} ${h(t('devmode.active'))}</span>` : ''}
+              ${u.created_at ? `<span class="muted small">${h(t('profile.since'))} ${h(fmtDate(u.created_at))}</span>` : ''}</div>
+          </div>
+        </header>
+        <div class="settings">
+          <section class="setting-card">
+            <div class="setting-ico">${icon('globe')}</div>
+            <div class="setting-main"><h2>${h(t('nav.language'))}</h2><p class="muted small">${h(t('profile.langHelp'))}</p></div>
+            <div class="seg seg-tabs seg-sm" role="radiogroup">
+              <button type="button" class="${getLang() === 'en' ? 'on' : ''}" data-lang="en" role="radio" aria-checked="${getLang() === 'en'}">English</button>
+              <button type="button" class="${getLang() === 'ar' ? 'on' : ''}" data-lang="ar" role="radio" aria-checked="${getLang() === 'ar'}">العربية</button>
+            </div>
+          </section>
+          <section class="setting-card ${state.isDev ? 'is-dev' : ''}">
+            <div class="setting-ico">${icon(state.isDev ? 'unlock' : 'lock')}</div>
+            <div class="setting-main"><h2>${h(t('devmode.title'))}</h2>
+              <p class="muted small">${h(state.isDev ? t('devmode.activeHelp', { left: devTimeLeft() }) : t('devmode.profileHelp'))}</p></div>
+            <div class="row-wrap">${state.isDev
+              ? `<a class="btn btn-small" href="#dev">${icon('grid', 16)} ${h(t('nav.dev'))}</a><button class="btn btn-small btn-ghost" id="dm-exit">${icon('logout', 16)} ${h(t('devmode.exit'))}</button>`
+              : `<button class="btn btn-small btn-primary" id="dm-enter">${icon('key', 16)} ${h(t('devmode.enter'))}</button>`}</div>
+          </section>
+          <form class="setting-card setting-form" id="pw-form">
+            <div class="setting-ico">${icon('key')}</div>
+            <div class="setting-main"><h2>${h(t('profile.changePassword'))}</h2>
+              <label class="field"><span class="sr-only">${h(t('auth.password'))}</span>
+                <input type="password" name="password" minlength="8" autocomplete="new-password" dir="ltr" required placeholder="${h(t('profile.newPasswordPh'))}"></label></div>
+            <button class="btn btn-small">${h(t('common.save'))}</button>
+          </form>
+          <section class="setting-card">
+            <div class="setting-ico">${icon('logout')}</div>
+            <div class="setting-main"><h2>${h(t('nav.signOut'))}</h2><p class="muted small">${h(t('profile.signOutHelp'))}</p></div>
+            <button class="btn btn-small btn-danger-text" id="p-out">${h(t('nav.signOut'))}</button>
+          </section>
         </div>
-      </div>
-      <form class="card stack" id="pw-form">
-        <h2 class="kicker" style="margin:0">${h(t('profile.changePassword'))}</h2>
-        <label class="field"><span>${h(t('auth.password'))}</span><input type="password" name="password" minlength="8" autocomplete="new-password" dir="ltr" required></label>
-        <button class="btn">${h(t('common.save'))}</button>
-      </form>
-      <div class="row-wrap">
-        ${state.isDev ? `<a class="btn" href="#dev">${h(t('nav.dev'))}</a>` : ''}
-        <button class="btn btn-ghost btn-danger-text" id="p-out">${h(t('nav.signOut'))}</button>
-      </div>
-    </section>`;
-  $$('input[name=lang]', main).forEach(r => r.onchange = () => { setLang(r.value); render(); });
-  $('#pw-form', main).onsubmit = async e => {
-    e.preventDefault();
-    const pw = e.target.password.value;
-    if (pw.length < 8) return toast(t('auth.shortPassword'), 'error');
-    const { error } = await sb.auth.updateUser({ password: pw });
-    if (error) return toast(errMsg(error), 'error');
-    e.target.reset(); toast(t('auth.passwordUpdated'));
+      </section>`;
+    main.querySelectorAll('[data-lang]').forEach(b => b.onclick = () => { setLang(b.dataset.lang); render(); });
+    $('#pw-form', main).onsubmit = async e => {
+      e.preventDefault();
+      const pw = e.target.password.value;
+      if (pw.length < 8) return toast(t('auth.shortPassword'), 'error');
+      const { error } = await sb.auth.updateUser({ password: pw });
+      if (error) return toast(errMsg(error), 'error');
+      e.target.reset(); toast(t('auth.passwordUpdated'));
+    };
+    const enter = $('#dm-enter', main); if (enter) enter.onclick = async () => { if (await openDevDialog()) render(); };
+    const exit = $('#dm-exit', main); if (exit) exit.onclick = async () => { if (await exitDevMode()) render(); };
+    $('#p-out', main).onclick = async () => {
+      if (state.isDev) await exitDevMode();
+      await sb.auth.signOut(); toast(t('auth.signedOut')); go('');
+    };
   };
-  $('#p-out', main).onclick = async () => { await sb.auth.signOut(); toast(t('auth.signedOut')); go(''); };
+  draw();
 }

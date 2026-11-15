@@ -19,9 +19,29 @@ A fan encyclopedia of the Fortnite story, in **English (LTR)** and **Arabic (RTL
 
 All long-form fields use the built-in rich-text editor: headings, bold and italic, lists, quotes, links, images and right-to-left or left-to-right paragraphs. None of them has a length limit.
 
+### Developer Mode
+
+Content management is behind a **developer access code**:
+
+1. A signed-in user opens **Developer Mode** (in the sidebar or on the Profile page) and enters the code.
+2. The database function `lore_enter_dev_mode` compares the code with a **bcrypt hash** kept in the private schema `lore_private`. The API doesn't expose that schema. The code itself is never in this repo, the website, or the browser.
+3. If the code is right, the account gets a **Developer Mode session that lasts 8 hours** (`lore_dev_sessions`). It is never a permanent role. The session ends when the user clicks **Exit Developer Mode**, signs out, or the 8 hours run out. An admin can also end it.
+4. Wrong codes show a clear error. After **5 wrong attempts in 15 minutes**, the account is locked out for the rest of that window.
+5. Every write is checked by Row Level Security through `lore_is_developer()`, which is true only while the session is active. Normal accounts can only read published content.
+
+**Set or change the access code.** Run this in the Supabase SQL Editor, replacing the placeholder with the new code:
+
+```sql
+insert into lore_private.settings (key, value)
+values ('dev_code_hash', extensions.crypt('YOUR-NEW-CODE', extensions.gen_salt('bf', 10)))
+on conflict (key) do update set value = excluded.value, updated_at = now();
+```
+
+To end every active session after changing the code, run `delete from public.lore_dev_sessions;`.
+
 ### Developer dashboard (`#dev`)
 
-The dashboard has these sections: Overview, Characters, Groups, Seasons, Image Archive, Mysteries, Relationship labels, and Access (admins only).
+The dashboard has these sections: Overview (stats, waiting drafts, recent changes, quick create), Characters, Groups, Seasons, Timeline, Stories (every long-form story with its word count), Image Archive, Mysteries, Publishing (publish or unpublish anything in one place), Relationship labels, and Access (admins only: active Developer Mode sessions and admin roles).
 
 Every item can be created, edited, previewed, saved as a draft, published, unpublished and deleted.
 
@@ -40,7 +60,7 @@ Every item can be created, edited, previewed, saved as a draft, published, unpub
 | Image files | Supabase Storage, private bucket `lore-media`, served with signed URLs |
 | Android app | Capacitor, built by GitHub Actions (`.github/workflows/android.yml`) |
 | Website deploy | GitHub Pages (`.github/workflows/pages.yml`) or any static host |
-| Original Claude Artifact | `preview/`: the same app code running on an in-memory database with sample data |
+| Original Claude Artifact | `preview/`: the same app code running on an in-memory database with sample data. Its Developer Mode uses the demo code `PREVIEW` and is not connected to the real database. |
 
 ### Database
 
@@ -56,11 +76,14 @@ Migrations, applied in order:
    - `mysteries`
    - `image_archive.season_id`
 
-Both migrations only add things, and running them twice does no harm. The older `teams` table and `characters.team_id` are kept so no data is lost. Migration 2 copies their contents into `groups` and `group_relationships` with the same ids, so old `#team/…` links redirect to the group page.
+3. `20261115160000_developer_mode.sql`: server-side Developer Mode (hashed access code, rate limiting, 8-hour sessions). `lore_is_developer()` now means "has an active Developer Mode session".
+
+All migrations only add things, and running them twice does no harm. The older `teams` table and `characters.team_id` are kept so no data is lost. Migration 2 copies their contents into `groups` and `group_relationships` with the same ids, so old `#team/…` links redirect to the group page.
 
 ### Security
 
-- Roles live in `lore_user_roles`, which has no write policies. A user can't grant themselves a role. Only admins can change roles, through `lore_grant_role` and `lore_revoke_role`, which check permission in the database.
+- Developer access is a time-limited server-side session opened with the access code (see **Developer Mode**). Nothing in the browser can create a session.
+- Admin roles live in `lore_user_roles`, which has no write policies. Admin tools also require an active Developer Mode session.
 - Every content table has Row Level Security:
   - **Read:** signed-in users see published records. A link between two records is visible only when both ends are published.
   - **Write:** only `lore_is_developer()` passes. The browser's role check only hides buttons; the database is what enforces access.
@@ -69,16 +92,16 @@ Both migrations only add things, and running them twice does no harm. The older 
 
 ## Setup
 
-1. **Make yourself admin.** Sign up on the site, then run this in the Supabase **SQL Editor**:
+1. **Developer Mode** works once migration `20261115160000_developer_mode.sql` is applied and the access code hash is stored (see **Developer Mode**).
+2. **Optional: make yourself admin**, so you can see and end other people's Developer Mode sessions. Sign up on the site, then run:
    ```sql
    insert into public.lore_user_roles (user_id, role)
    select id, 'admin' from auth.users where email = 'YOUR-EMAIL@example.com'
    on conflict do nothing;
    ```
-   After that, you can add other developers from **Developer → Access**.
-2. **Auth URLs.** In Supabase, open **Authentication → URL Configuration**. Set the **Site URL** to your website address and add it to **Redirect URLs**.
-3. **Hosting.** For GitHub Pages, go to **Settings → Pages → Source: GitHub Actions**. Otherwise, publish the repo root on Netlify or any static host; there is no build command.
-4. **Android APK.** Every push to `main` builds one. Download it from **Actions → Android APK → Artifacts**.
+3. **Auth URLs.** In Supabase, open **Authentication → URL Configuration**. Set the **Site URL** to your website address and add it to **Redirect URLs**.
+4. **Hosting.** For GitHub Pages, go to **Settings → Pages → Source: GitHub Actions**. Otherwise, publish the repo root on Netlify or any static host; there is no build command.
+5. **Android APK.** Every push to `main` builds one. Download it from **Actions → Android APK → Artifacts**.
 
 ## Development
 
